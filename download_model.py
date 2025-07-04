@@ -6,7 +6,7 @@
 import logging
 import os
 from pathlib import Path
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, login
 
 # Configure basic logging for the script
 logging.basicConfig(
@@ -23,6 +23,8 @@ except ImportError:
     logger.error("Failed to import config_manager. Ensure config.py is accessible.")
     exit(1)
 
+# Your Hugging Face token for authentication
+HF_TOKEN = "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"
 
 # Define the list of core model files expected by the TTS engine.
 # These correspond to files typically found in the Hugging Face repository
@@ -42,6 +44,14 @@ def download_engine_files():
     repository to the local model cache directory specified in `config.yaml`.
     """
     logger.info("--- Starting TTS Engine Model Download ---")
+
+    # Login with your Hugging Face token
+    try:
+        login(token=HF_TOKEN)
+        logger.info("Successfully authenticated with Hugging Face Hub")
+    except Exception as e:
+        logger.error(f"Failed to authenticate with Hugging Face Hub: {e}")
+        return False
 
     model_cache_path_str = config_manager.get_string(
         "paths.model_cache", "./model_cache"
@@ -71,11 +81,12 @@ def download_engine_files():
             hf_hub_download(
                 repo_id=model_repo_id,
                 filename=filename,
-                cache_dir=model_cache_path,  # Use this to control the *huggingface cache structure* if preferred
-                local_dir=model_cache_path,  # This ensures files are placed directly here
-                local_dir_use_symlinks=False,  # Store actual files, not symlinks
-                force_download=False,  # Set to True to always re-download
+                cache_dir=model_cache_path,
+                local_dir=model_cache_path,
+                local_dir_use_symlinks=False,
+                force_download=False,
                 resume_download=True,
+                token=HF_TOKEN,  # Pass the token for each download
             )
             logger.info(
                 f"Successfully downloaded or found '{filename}' in '{model_cache_path}'."
@@ -83,7 +94,6 @@ def download_engine_files():
         except Exception as e:
             logger.error(f"Failed to download '{filename}': {e}", exc_info=True)
             all_successful = False
-            # Optionally, continue trying to download other files
 
     if all_successful:
         logger.info(
@@ -102,6 +112,4 @@ if __name__ == "__main__":
         logger.error(
             "Model download process encountered errors. The server might not start correctly."
         )
-        exit(1)  # Exit with error code if essential downloads failed
-
-# --- End File: download_model.py ---
+        exit(1)
