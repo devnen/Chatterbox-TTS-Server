@@ -258,14 +258,7 @@ pip install --upgrade pip
 pip install torch torchvision torchaudio
 ```
 
-**Step 2: Configure the server to use MPS**
-Update your `config.yaml` to use MPS instead of CUDA:
-```bash
-# The server will create config.yaml on first run, or you can create it manually
-# Make sure the tts_engine device is set to 'mps'
-```
-
-**Step 3: Install remaining dependencies**
+**Step 2: Install remaining dependencies**
 ```bash
 # Install chatterbox-tts without its dependencies to avoid conflicts
 pip install --no-deps git+https://github.com/resemble-ai/chatterbox.git
@@ -283,8 +276,8 @@ pip install --no-deps s3tokenizer
 pip install onnx==1.16.0
 ```
 
-**Step 4: Configure MPS device**
-Either edit `config.yaml` manually or let the server create it, then modify:
+**Step 3: Configure MPS device**
+Edit `config.yaml` modify:
 ```yaml
 tts_engine:
   device: mps  # Changed from 'cuda' to 'mps'
