@@ -50,6 +50,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "model": {  # Added section for model source configuration
         "repo_id": "ResembleAI/chatterbox",  # Default Hugging Face repository ID for the model
+        "use_multilingual": True,  # Use multilingual model for 23 languages support (default: True)
     },
     "tts_engine": {
         "device": "auto",  # TTS processing device: 'auto', 'cuda', 'mps', or 'cpu'.
@@ -72,11 +73,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "generation_defaults": {  # Default parameters for TTS audio generation.
         "temperature": 0.8,  # Controls randomness: lower is more deterministic.
-        "exaggeration": 0.5,  # Controls expressiveness or exaggeration in speech.
+        "exaggeration": 0.5,  # Controls expressiveness or exaggeration in speech. Range: 0.5 (subdued) to 3.0 (very dramatic).
         "cfg_weight": 0.5,  # Classifier-Free Guidance weight, influences adherence to prompt/style.
         "seed": 0,  # Random seed for generation. 0 often means random or engine default.
         "speed_factor": 1.0,  # Controls the speed of the generated speech.
-        "language": "en",  # Default language for TTS.
+        "language": "en",  # Default language for TTS. Supported: ar (Arabic), da (Danish), de (German), el (Greek), en (English), es (Spanish), fi (Finnish), fr (French), he (Hebrew), hi (Hindi), it (Italian), ja (Japanese), ko (Korean), ms (Malay), nl (Dutch), no (Norwegian), pl (Polish), pt (Portuguese), ru (Russian), sv (Swedish), sw (Swahili), tr (Turkish), zh (Chinese). Note: Quality may vary by language.
     },
     "audio_output": {  # Settings related to the format of generated audio.
         "format": "wav",  # Output audio format (e.g., 'wav', 'mp3').

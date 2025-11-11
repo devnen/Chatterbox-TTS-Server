@@ -16,9 +16,9 @@ class GenerationParams(BaseModel):
     )
     exaggeration: Optional[float] = Field(
         None,
-        ge=0.25,  # Based on Chatterbox Gradio app
-        le=2.0,  # Based on Chatterbox Gradio app
-        description="Controls expressiveness/exaggeration. (Range: 0.25-2.0)",
+        ge=0.5,  # Based on Chatterbox tutorial notebook
+        le=3.0,  # Based on Chatterbox tutorial notebook
+        description="Controls expressiveness/exaggeration. Lower values are more subdued/calm, higher values are more dramatic/energetic. (Range: 0.5-3.0)",
     )
     cfg_weight: Optional[float] = Field(
         None,
