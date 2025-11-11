@@ -25,7 +25,7 @@ generation_defaults:
   cfg_weight: 0.5
   seed: 0
   speed_factor: 1.0
-  language: hi
+  language: en
 audio_output:
   format: wav
   sample_rate: 24000
