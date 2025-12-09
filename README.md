@@ -623,16 +623,22 @@ docker compose -f docker-compose-rocm.yml exec chatterbox-tts-server python3 -c 
 
 ### 5. View Logs and Manage Container```bash
 # View logs
+
+```bash
 docker compose logs -f                                    # For NVIDIA
 docker compose -f docker-compose-rocm.yml logs -f         # For AMD
 docker compose -f docker-compose-cpu.yml logs -f          # For CPU
-
+```
 # Stop the container
+
+```bash
 docker compose down                                       # For NVIDIA
 docker compose -f docker-compose-rocm.yml down            # For AMD
 docker compose -f docker-compose-cpu.yml down             # For CPU
-
+```
 # Restart the container
+
+```bash
 docker compose restart chatterbox-tts-server              # For NVIDIA
 docker compose -f docker-compose-rocm.yml restart chatterbox-tts-server # For AMD
 docker compose -f docker-compose-cpu.yml restart chatterbox-tts-server # For CPU
