@@ -29,6 +29,7 @@ audio_output:
   format: wav
   sample_rate: 24000
   max_reference_duration_sec: 30
+  save_to_disk: false
 ui_state:
   last_text: 'Are you tired of slow, unreliable connections? Upgrade today to Quantum
     Fiber, the fastest internet in the galaxy! Experience seamless streaming, lag-free
