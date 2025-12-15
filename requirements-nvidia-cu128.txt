@@ -1,0 +1,20 @@
+# requirements-nvidia-cu128.txt (For NVIDIA GPU Installation with CUDA 12.8)
+# This file provides CUDA 12.8 support including RTX 5090 / Blackwell architecture (sm_120)
+# Use this file if you have:
+# - RTX 5090 or other Blackwell GPUs
+# - CUDA 12.8+ drivers installed
+# - Need for latest PyTorch features
+
+# Use the official PyTorch package index for CUDA 12.8
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+# PyTorch 2.8.0 with CUDA 12.8 - includes sm_120 (Blackwell) support
+torch==2.8.0
+torchvision==0.23.0
+torchaudio==2.8.0
+
+# --- Core Application Dependencies ---
+
+# Chatterbox TTS and dependencies
+# Note: Install this separately with --no-deps to prevent PyTorch downgrade
+# pip install --no-deps git+https://github.com/devnen/chatterbox.git
