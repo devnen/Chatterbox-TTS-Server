@@ -82,6 +82,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "format": "wav",  # Output audio format (e.g., 'wav', 'mp3').
         "sample_rate": 24000,  # Sample rate of the output audio in Hz.
         "max_reference_duration_sec": 30,  # Maximum duration for reference audio files.
+        "save_to_disk": False,  # If true, save generated audio files to disk in outputs folder.
     },
     "ui_state": {  # Stores user interface preferences and last-used values.
         "last_text": "",  # Last text entered by the user.
@@ -248,7 +249,7 @@ class YamlConfigManager:
                     f"CUDA is reported as available but failed functionality test: {e}. "
                     f"This usually means PyTorch was not compiled with CUDA support."
                 )
-        
+
         # Test MPS if CUDA is not available or failed
         if torch.backends.mps.is_available():
             try:
@@ -263,7 +264,7 @@ class YamlConfigManager:
                     f"MPS is reported as available but failed functionality test: {e}. "
                     f"This usually means PyTorch was not compiled with MPS support."
                 )
-        
+
         logger.info("Neither CUDA nor MPS is available or functional. Using CPU.")
         return "cpu"
 
