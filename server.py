@@ -893,6 +893,31 @@ async def custom_tts_endpoint(
     )
     logger.debug(perf_monitor.report())
 
+    # Optional: Save to disk if enabled
+    if config_manager.get_bool("audio_output.save_to_disk", False):
+        output_dir = get_output_path(ensure_absolute=True)
+        output_file_path = output_dir / download_filename
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            with open(output_file_path, "wb") as f:
+                f.write(encoded_audio_bytes)
+            if not output_file_path.exists() or output_file_path.stat().st_size < 100:
+                logger.error(f"File save verification failed for {output_file_path}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save audio file to {output_file_path}",
+                )
+            logger.info(f"Audio saved to disk: {output_file_path}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to save audio to {output_file_path}: {e}", exc_info=True
+            )
+            raise HTTPException(
+                status_code=500, detail=f"Failed to save audio file: {e}"
+            )
+
     return StreamingResponse(
         io.BytesIO(encoded_audio_bytes), media_type=media_type, headers=headers
     )
@@ -967,6 +992,40 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
 
         # Determine the media type
         media_type = f"audio/{request.response_format}"
+
+        # Optional: Save to disk if enabled
+        if config_manager.get_bool("audio_output.save_to_disk", False):
+            output_dir = get_output_path(ensure_absolute=True)
+            timestamp_str = time.strftime("%Y%m%d_%H%M%S")
+            download_filename = f"openai_tts_{timestamp_str}.{request.response_format}"
+            output_file_path = output_dir / download_filename
+            try:
+                output_dir.mkdir(parents=True, exist_ok=True)
+                with open(output_file_path, "wb") as f:
+                    f.write(encoded_audio)
+                if (
+                    not output_file_path.exists()
+                    or output_file_path.stat().st_size < 100
+                ):
+                    logger.error(
+                        f"File save verification failed for {output_file_path}"
+                    )
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to save audio file to {output_file_path}",
+                    )
+                logger.info(
+                    f"OpenAI-compatible audio saved to disk: {output_file_path}"
+                )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(
+                    f"Failed to save audio to {output_file_path}: {e}", exc_info=True
+                )
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to save audio file: {e}"
+                )
 
         # Return the streaming response
         return StreamingResponse(io.BytesIO(encoded_audio), media_type=media_type)
