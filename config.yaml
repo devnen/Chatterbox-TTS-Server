@@ -1,6 +1,6 @@
 server:
   host: 0.0.0.0
-  port: 8004
+  port: 8000
   use_ngrok: false
   use_auth: false
   auth_username: user
@@ -10,17 +10,18 @@ server:
   log_file_backup_count: 5
 model:
   repo_id: ResembleAI/chatterbox
+  use_multilingual: true
 tts_engine:
-  device: cuda
+  device: mps
   predefined_voices_path: voices
   reference_audio_path: reference_audio
-  default_voice_id: Emily.wav
+  default_voice_id: default_sample.wav
 paths:
   model_cache: model_cache
   output: outputs
 generation_defaults:
   temperature: 0.8
-  exaggeration: 1.3
+  exaggeration: 0.5
   cfg_weight: 0.5
   seed: 0
   speed_factor: 1.0
@@ -31,24 +32,39 @@ audio_output:
   max_reference_duration_sec: 30
   save_to_disk: false
 ui_state:
-  last_text: 'Are you tired of slow, unreliable connections? Upgrade today to Quantum
-    Fiber, the fastest internet in the galaxy! Experience seamless streaming, lag-free
-    gaming, and instant downloads. Call now and get your first three months half price!
-    Don''t wait, this offer won''t last forever!
-
-    '
-  last_voice_mode: predefined
-  last_predefined_voice: Emily.wav
-  last_reference_file: Gianna.wav
-  last_seed: 3000
-  last_chunk_size: 240
+  last_text:
+    "\u092E\u0948\u0902 \u0938\u093E\u0915\u094D\u0937\u0940 \u0906\u0928\
+    \u0902\u0926 \u0939\u0942\u0901\u0964 \u092E\u0948\u0902 \u092C\u093F\u0939\u093E\
+    \u0930 \u0915\u0947 \u092A\u091F\u0928\u093E \u092E\u0947\u0902 \u092A\u0948\u0926\
+    \u093E \u0939\u0941\u0908 \u0925\u0940, \u0914\u0930 \u0905\u092C \u092A\u0941\
+    \u0923\u0947 \u092E\u0947\u0902 \u0930\u0939 \u0930\u0939\u0940 \u0939\u0942\u0901\
+    \u0964\n\n\u092E\u0948\u0902 \u092C\u0939\u0941\u0924 \u0906\u0932\u0938\u0940\
+    \ \u0932\u0921\u093C\u0915\u0940 \u0939\u0942\u0901\u0964 \u092E\u0948\u0902 \u0938\
+    \u0941\u092C\u0939 \u092C\u0939\u0941\u0924 \u0926\u0947\u0930 \u0938\u0947 \u0909\
+    \u0920\u0924\u0940 \u0939\u0942\u0901, \u092E\u0941\u091D\u0947 \u0917\u092A\u0936\
+    \u092A \u0915\u0930\u0928\u093E \u092C\u0939\u0941\u0924 \u092A\u0938\u0902\u0926\
+    \ \u0939\u0948\u0964 \u092E\u0948\u0902 \u090F\u0915 \u092E\u0930\u094D\u0926\
+    \ \u092C\u0928\u0928\u093E \u091A\u093E\u0939\u0924\u0940 \u0939\u0942\u0901\u0964\
+    \ \u092E\u0941\u091D\u0947 \u0913\u0936\u094B \u0915\u0947 \u0935\u093F\u091A\u093E\
+    \u0930 \u092C\u0939\u0941\u0924 \u092A\u0938\u0902\u0926 \u0939\u0948\u0902, \u091C\
+    \u093F\u0928\u094D\u0939\u094B\u0902\u0928\u0947 \u092E\u0941\u091D\u0947 \u0938\
+    \u093F\u0916\u093E\u092F\u093E \u0915\u093F \u092E\u0941\u0936\u094D\u0915\u093F\
+    \u0932 \u0938\u0935\u093E\u0932 \u092A\u0942\u091B\u0928\u093E \u0915\u093F\u0924\
+    \u0928\u093E \u091C\u093C\u0930\u0942\u0930\u0940 \u0939\u0948\u0964 \u0914\u0930\
+    \ \u092E\u0947\u0930\u093E \u0926\u093F\u092E\u093E\u0917 \u0918\u0941\u091F\u0928\
+    \u0947 \u092E\u0947\u0902 \u0939\u0948\u0964"
+  last_voice_mode: clone
+  last_predefined_voice: none
+  last_reference_file: recn.wav
+  last_seed: 2024
+  last_chunk_size: 250
   last_split_text_enabled: true
   hide_chunk_warning: false
-  hide_generation_warning: false
+  hide_generation_warning: true
   theme: light
 ui:
   title: Chatterbox TTS Server
   show_language_select: true
-  max_predefined_voices_in_dropdown: 50
+  max_predefined_voices_in_dropdown: 20
 debug:
   save_intermediate_audio: false
