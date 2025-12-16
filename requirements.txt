@@ -9,21 +9,22 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 # --- Deep Learning Framework (CPU-Only) ---
-# Updated to match chatterbox-tts requirement for torch==2.6.0
-torch==2.6.0                    # PyTorch deep learning framework (CPU)
-torchvision==0.21.0             # Computer vision utilities for PyTorch
-torchaudio==2.6.0               # Audio processing utilities for PyTorch
+# Pinning a compatible set of torch-related libraries is crucial to avoid dependency conflicts.
+# Updated to use PyTorch 2.5.1 for compatibility with our Colab-compatible chatterbox fork
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 
 # --- Core TTS Application ---
-# Chatterbox TTS engine - installed directly from GitHub
-chatterbox-tts==0.1.2
+# Chatterbox TTS engine - Install from chatterbox-v2 fork
+chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master
 
 # --- Web Framework & Server ---
 fastapi                         # Modern async web framework
 uvicorn[standard]               # ASGI server with performance extras
 
 # --- Scientific Computing & ML Libraries ---
-numpy==1.26.4                   # Fundamental numerical computing
+numpy>=1.24.0,<1.26.0           # Fundamental numerical computing
 librosa                         # Advanced audio/music analysis
 safetensors                     # Safe tensor serialization format
 descript-audio-codec            # Audio codec for ML applications
