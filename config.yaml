@@ -9,7 +9,7 @@ server:
   log_file_max_size_mb: 10
   log_file_backup_count: 5
 model:
-  repo_id: ResembleAI/chatterbox
+  repo_id: chatterbox-turbo
 tts_engine:
   device: cuda
   predefined_voices_path: voices
