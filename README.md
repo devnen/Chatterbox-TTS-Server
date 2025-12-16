@@ -79,6 +79,12 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 
 **🔧 General Enhancements:**
 
+*   **Easy Installation & Management:**
+    *   🚀 **Automated Launcher** (`start.bat` / `start.sh`) - One-command setup with automatic hardware detection
+    *   🔧 **Multiple GPU Support** - NVIDIA CUDA 12.1, NVIDIA CUDA 12.8 (Blackwell), AMD ROCm, Apple MPS
+    *   🔄 **Easy Updates** - Simple `--upgrade` and `--reinstall` commands
+    *   📦 **Isolated Environment** - Automatic virtual environment management
+    *   🎯 **Skip Menu Options** - Direct installation with `--cpu`, `--nvidia`, `--nvidia-cu128`, `--rocm` flags
 *   **Performance:** Optimized for speed and efficient VRAM usage on GPU.
 *   **Web Interface:** Modern, responsive UI for plain text input, parameter adjustment, preset loading, reference/predefined audio management, and audio playback.
 *   **Model Loading:** Uses `ChatterboxTTS.from_pretrained()` for robust model loading from Hugging Face Hub, utilizing the standard HF cache.
@@ -135,25 +141,148 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 *   **Python:** Version 3.10 or later ([Download](https://www.python.org/downloads/)).
 *   **Git:** For cloning the repository ([Download](https://git-scm.com/downloads)).
 *   **Internet:** For downloading dependencies and models from Hugging Face Hub.
+*   **Disk Space:** 10GB+ recommended (for dependencies and model cache).
 *   **(Optional but HIGHLY Recommended for Performance):**
-    *   **NVIDIA GPU:** CUDA-compatible (Maxwell architecture or newer). Check [NVIDIA CUDA GPUs](https://developer.nvidia.com/cuda-gpus).
+    *   **NVIDIA GPU (CUDA 12.1):** CUDA-compatible (Maxwell architecture or newer, RTX 20/30/40 series). Check [NVIDIA CUDA GPUs](https://developer.nvidia.com/cuda-gpus).
+    *   **NVIDIA GPU (CUDA 12.8):** RTX 5090 or other Blackwell-based GPUs, driver version 570+.
     *   **NVIDIA Drivers:** Latest version for your GPU/OS ([Download](https://www.nvidia.com/Download/index.aspx)).
     *   **AMD GPU:** ROCm-compatible (e.g., RX 6000/7000 series). Check [AMD ROCm GPUs](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html).
-    *   **AMD Drivers:** Latest ROCm-compatible drivers for your GPU/OS.
-    *   **Apple Silicon:** M1, M2, M3, or newer Apple Silicon chips with macOS 12.3+ for MPS acceleration.
+    *   **AMD Drivers:** Latest ROCm-compatible drivers for your GPU/OS (Linux only).
+    *   **Apple Silicon:** M1, M2, M3, M4, or newer Apple Silicon chips with macOS 12.3+ for MPS acceleration.
 *   **(Linux Only):**
     *   `libsndfile1`: Audio library needed by `soundfile`. Install via package manager (e.g., `sudo apt install libsndfile1`).
     *   `ffmpeg`: For robust audio operations (optional but recommended). Install via package manager (e.g., `sudo apt install ffmpeg`).
 
+### Hardware Compatibility Matrix
+
+| Hardware | Installation Option | Requirements File | Driver Requirement |
+|----------|--------------------|--------------------|-------------------|
+| CPU Only | `--cpu` | requirements.txt | None |
+| NVIDIA RTX 20/30/40 | `--nvidia` | requirements-nvidia.txt | 525+ |
+| NVIDIA RTX 5090 / Blackwell | `--nvidia-cu128` | requirements-nvidia-cu128.txt | 570+ |
+| AMD RX 6000/7000 (Linux) | `--rocm` | requirements-rocm.txt | ROCm 6.4+ |
+| Apple Silicon (M1/M2/M3/M4) | Manual install | See Option 4 | macOS 12.3+ |
+```
+
+---
+
 ## 💻 Installation and Setup
 
-This project uses specific dependency files to ensure a smooth, one-command installation for your hardware. Follow the path that matches your system.
+This project uses specific dependency files to ensure a smooth installation for your hardware. You can choose between the **automated launcher** (recommended for most users) or **manual installation** (for advanced users).
 
 **1. Clone the Repository**
 ```bash
 git clone https://github.com/devnen/Chatterbox-TTS-Server.git
 cd Chatterbox-TTS-Server
 ```
+
+---
+
+### 🚀 Quick Start with Automated Launcher (Recommended)
+
+The automated launcher handles virtual environment creation, hardware detection, dependency installation, and server startup - all in one step.
+
+#### Windows
+
+```bash
+# Double-click start.bat or run from command prompt:
+start.bat
+```
+
+#### Linux / macOS
+
+```bash
+# Make the launcher executable and run it
+chmod +x start.sh
+./start.sh
+```
+
+#### What Happens
+
+1. The launcher checks your Python installation (3.10+ required)
+2. Creates a virtual environment automatically
+3. Detects your GPU hardware (NVIDIA, AMD, or CPU-only)
+4. Shows an installation menu with recommended option pre-selected:
+
+```
+══════════════════════════════════════════════════════════════
+   Hardware Detection
+══════════════════════════════════════════════════════════════
+
+   NVIDIA GPU: Detected (NVIDIA GeForce RTX 4090)
+   AMD GPU:    Not detected
+
+══════════════════════════════════════════════════════════════
+   Select Installation Type
+══════════════════════════════════════════════════════════════
+
+   [1] CPU Only
+       No GPU acceleration - works on any system
+
+   [2] NVIDIA GPU (CUDA 12.1) [DEFAULT]
+       Standard for RTX 20/30/40 series
+
+   [3] NVIDIA GPU (CUDA 12.8)
+       For RTX 5090 / Blackwell GPUs only
+
+   [4] AMD GPU (ROCm 6.4)
+       For AMD GPUs on Linux
+
+   Enter choice [2]: 
+```
+
+5. Press **Enter** to accept the recommended default, or type a number to select a different option
+6. Dependencies are installed automatically (this may take several minutes on first run)
+7. The server starts and displays the access URLs
+
+#### Launcher Command-Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--reinstall` or `-r` | Remove existing installation and reinstall fresh (shows menu) |
+| `--upgrade` or `-u` | Upgrade to latest version (keeps current hardware selection) |
+| `--cpu` | Install CPU-only version (skip menu) |
+| `--nvidia` | Install NVIDIA CUDA 12.1 version (skip menu) |
+| `--nvidia-cu128` | Install NVIDIA CUDA 12.8 version for RTX 5090/Blackwell (skip menu) |
+| `--rocm` | Install AMD ROCm version (skip menu) |
+| `--verbose` or `-v` | Show detailed installation output |
+| `--help` or `-h` | Show help message |
+
+**Examples:**
+
+```bash
+# Skip menu and install NVIDIA CUDA 12.1 directly
+python start.py --nvidia
+
+# Reinstall with fresh dependencies
+python start.py --reinstall
+
+# Upgrade to latest version (keeps your hardware selection)
+python start.py --upgrade
+
+# Install with verbose output for troubleshooting
+python start.py --reinstall --nvidia --verbose
+```
+
+#### Subsequent Runs
+
+After the first installation, simply run the launcher again to start the server:
+
+```bash
+# Windows
+start.bat
+
+# Linux/macOS
+./start.sh
+```
+
+The launcher detects the existing installation and starts the server directly without reinstalling.
+
+---
+
+### 📋 Manual Installation
+
+For users who prefer manual control over the installation process.
 
 **2. Create a Python Virtual Environment**
 
@@ -195,9 +324,9 @@ The `requirements.txt` file is specially crafted for CPU users. It tells `pip` t
 
 ---
 
-### **Option 2: NVIDIA GPU Installation (CUDA)**
+### **Option 2: NVIDIA GPU Installation (CUDA 12.1)**
 
-For users with NVIDIA GPUs. This provides the best performance.
+For users with NVIDIA GPUs. This provides the best performance for RTX 20/30/40 series.
 
 **Prerequisite:** Ensure you have the latest NVIDIA drivers installed.
 
@@ -243,8 +372,10 @@ docker compose -f docker-compose-cu128.yml up -d
 # Make sure your (venv) is active
 pip install --upgrade pip
 pip install -r requirements-nvidia-cu128.txt
-pip install --no-deps git+https://github.com/devnen/chatterbox.git
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 ```
+
+⚠️ **Critical:** The `--no-deps` flag is required to prevent PyTorch from being downgraded to a version that doesn't support Blackwell GPUs.
 
 **After installation, verify that PyTorch supports sm_120:**
 ```bash
@@ -260,19 +391,6 @@ The RTX 5090 uses NVIDIA's new **Blackwell architecture** with compute capabilit
 
 See [README_CUDA128.md](README_CUDA128.md) for detailed setup instructions and troubleshooting.
 </details>
-```
-
-## Additional file to create
-
-Add this note to the Docker section (around line 290-300):
-
-```markdown
-**For RTX 5090 / Blackwell GPUs:** Use the CUDA 12.8 configuration:
-```bash
-docker compose -f docker-compose-cu128.yml up -d
-```
-See [README_CUDA128.md](README_CUDA128.md) for details.
-```
 
 ---
 
@@ -296,14 +414,14 @@ If `ROCm available:` shows `True`, your setup is correct!
 
 <details>
 <summary><strong>💡 How This Works</strong></summary>
-The `requirements-rocm.txt` file works just like the NVIDIA one, but it points `pip` to PyTorch's official ROCm 5.7 package repository. This ensures that the correct GPU-enabled libraries for AMD hardware are installed, providing a stable and performant environment.
+The `requirements-rocm.txt` file works just like the NVIDIA one, but it points `pip` to PyTorch's official ROCm 6.4.1 package repository. This ensures that the correct GPU-enabled libraries for AMD hardware are installed, providing a stable and performant environment.
 </details>
 
 ---
 
 ### **Option 4: Apple Silicon (MPS) Installation**
 
-For users with Apple Silicon Macs (M1, M2, M3, etc.).
+For users with Apple Silicon Macs (M1, M2, M3, M4, etc.).
 
 **Prerequisite:** Ensure you have macOS 12.3 or later for MPS support.
 
@@ -316,15 +434,15 @@ pip install torch torchvision torchaudio
 
 **Step 2: Configure the server to use MPS**
 Update your `config.yaml` to use MPS instead of CUDA:
-```bash
-# The server will create config.yaml on first run, or you can create it manually
-# Make sure the tts_engine device is set to 'mps'
+```yaml
+tts_engine:
+  device: mps  # Changed from 'cuda' to 'mps'
 ```
 
 **Step 3: Install remaining dependencies**
 ```bash
 # Install chatterbox-tts without its dependencies to avoid conflicts
-pip install --no-deps git+https://github.com/resemble-ai/chatterbox.git
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 
 # Install core server dependencies
 pip install fastapi 'uvicorn[standard]' librosa safetensors soundfile pydub audiotsm praat-parselmouth python-multipart requests aiofiles PyYAML watchdog unidecode inflect tqdm
@@ -335,15 +453,8 @@ pip install conformer==0.3.2 diffusers==0.29.0 resemble-perth==1.0.1 transformer
 # Install s3tokenizer without its problematic dependencies
 pip install --no-deps s3tokenizer
 
-# Install a compatible version of ONNX
-pip install onnx==1.16.0
-```
-
-**Step 4: Configure MPS device**
-Either edit `config.yaml` manually or let the server create it, then modify:
-```yaml
-tts_engine:
-  device: mps  # Changed from 'cuda' to 'mps'
+# Install a compatible version of ONNX and audio codec
+pip install onnx==1.16.0 descript-audio-codec
 ```
 
 **After installation, verify that PyTorch can see your GPU:**
@@ -356,6 +467,7 @@ If `MPS available:` shows `True`, your setup is correct!
 <summary><strong>💡 Why This Process Is Different</strong></summary>
 Apple Silicon requires a specific installation sequence due to dependency conflicts between the pinned PyTorch versions in chatterbox-tts and the latest PyTorch versions that support MPS. By installing PyTorch first with MPS support, then carefully installing dependencies while avoiding version conflicts, we ensure MPS acceleration works properly. The server's automatic device detection will use MPS when configured and available.
 </details>
+```
 
 ---
 
@@ -423,6 +535,31 @@ The very first time you start the server, it needs to download the `chatterbox-t
 
 You can *optionally* use the `python download_model.py` script to pre-download specific model components to the `./model_cache` directory defined in `config.yaml`. However, please note that the runtime engine (`engine.py`) primarily loads the model from the main Hugging Face Hub cache directly, not this specific local `model_cache` directory.
 
+### Using the Automated Launcher (Recommended)
+
+The easiest way to run the server is using the automated launcher:
+
+**Windows:**
+```bash
+start.bat
+```
+
+**Linux / macOS:**
+```bash
+./start.sh
+```
+
+The launcher automatically:
+- Activates the virtual environment
+- Verifies the installation is complete
+- Starts the server
+- Waits for the server to be ready (including model download on first run)
+- Displays the access URLs when ready
+
+### Manual Server Start
+
+If you prefer to start the server manually:
+
 **Steps to Run:**
 
 1.  **Activate the virtual environment (if not activated):**
@@ -435,30 +572,84 @@ You can *optionally* use the `python download_model.py` script to pre-download s
 3.  **Access the UI:** After the server starts (and completes any initial model downloads), it should automatically attempt to open the Web UI in your default browser. If it doesn't, manually navigate to `http://localhost:PORT` (e.g., `http://localhost:8004` if your configured port is 8004).
 4.  **Access API Docs:** Open `http://localhost:PORT/docs` for interactive API documentation.
 5.  **Stop the server:** Press `CTRL+C` in the terminal where the server is running.
+```
 
 ## 🔄 Updating to the Latest Version
 
-Follow these steps to update your local installation to the latest version from GitHub. This guide provides two methods: the recommended `git stash` workflow and a manual backup alternative. Both will preserve your local `config.yaml`.
+Follow these steps to update your local installation to the latest version from GitHub. This guide provides multiple methods: using the automated launcher, the recommended `git stash` workflow, and a manual backup alternative. All methods preserve your local `config.yaml`.
 
-**First, Navigate to Your Project Directory & Activate Venv**
+**First, Navigate to Your Project Directory**
 
-Before starting, open your terminal, go to the project folder, and activate your virtual environment.
+Before starting, open your terminal and go to the project folder.
 
 ```bash
 cd Chatterbox-TTS-Server
+```
 
+---
+
+### **Method 1: Using the Automated Launcher (Easiest)**
+
+The launcher provides simple upgrade functionality that handles everything automatically.
+
+**Upgrade (keeps your hardware selection):**
+```bash
+# First, pull the latest code
+git pull origin main
+
+# Then upgrade dependencies using the launcher
+# Windows
+python start.py --upgrade
+
+# Linux/macOS
+python3 start.py --upgrade
+```
+
+**Full Reinstall (choose new hardware option):**
+```bash
+git pull origin main
+
+# Windows
+python start.py --reinstall
+
+# Linux/macOS
+python3 start.py --reinstall
+```
+
+The `--upgrade` flag preserves your current hardware selection (CPU, NVIDIA, etc.) and reinstalls dependencies.
+
+The `--reinstall` flag removes the existing installation completely and shows the hardware selection menu again.
+
+**Changing Hardware Configuration:**
+
+To switch to a different hardware configuration (e.g., from CPU to NVIDIA, or from CUDA 12.1 to CUDA 12.8):
+
+```bash
+# Shows menu to select new hardware
+python start.py --reinstall
+
+# Or specify directly
+python start.py --reinstall --nvidia
+python start.py --reinstall --nvidia-cu128
+python start.py --reinstall --cpu
+python start.py --reinstall --rocm
+```
+
+---
+
+### **Method 2: Stash and Pop (Recommended for Manual Installation)**
+
+If you installed manually without using the launcher, this is the standard and safest way to update using Git. It automatically handles your local changes (like to `config.yaml`) without needing to manually copy files.
+
+**First, activate your virtual environment:**
+
+```bash
 # On Windows (PowerShell):
 .\venv\Scripts\activate
 
 # On Linux (Bash):
 source venv/bin/activate
 ```
-
----
-
-### **Method 1: Stash and Pop (Recommended)**
-
-This is the standard and safest way to update using Git. It automatically handles your local changes (like to `config.yaml`) without needing to manually copy files.
 
 *   **Step 1: Stash Your Local Changes**
     This command safely stores your modifications on a temporary "shelf."
@@ -481,9 +672,19 @@ This is the standard and safest way to update using Git. It automatically handle
 
 ---
 
-### **Method 2: Manual Backup (Alternative)**
+### **Method 3: Manual Backup (Alternative)**
 
 This method involves manually backing up and restoring your configuration file.
+
+**First, activate your virtual environment:**
+
+```bash
+# On Windows (PowerShell):
+.\venv\Scripts\activate
+
+# On Linux (Bash):
+source venv/bin/activate
+```
 
 *   **Step 1: Backup Your Configuration**
     ⚠️ **Important:** Create a backup of your `config.yaml` to preserve your custom settings.
@@ -515,9 +716,9 @@ This method involves manually backing up and restoring your configuration file.
 
 ---
 
-### **Final Steps (For Both Methods)**
+### **Final Steps (For Methods 2 & 3)**
 
-After you have updated the code using either method, complete these final steps.
+After you have updated the code using Method 2 or 3, complete these final steps.
 
 **1. Check for New Configuration Options**
 
@@ -531,9 +732,14 @@ After you have updated the code using either method, complete these final steps.
     ```bash
     pip install -r requirements.txt
     ```
-*   **For NVIDIA GPU Systems:**
+*   **For NVIDIA GPU Systems (CUDA 12.1):**
     ```bash
     pip install -r requirements-nvidia.txt
+    ```
+*   **For NVIDIA GPU Systems (CUDA 12.8 / Blackwell):**
+    ```bash
+    pip install -r requirements-nvidia-cu128.txt
+    pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
     ```
 *   **For AMD GPU Systems:**
     ```bash
@@ -555,6 +761,13 @@ python server.py
 docker compose down
 docker compose pull  # if using pre-built images
 docker compose up -d --build
+```
+
+**For RTX 5090 / Blackwell GPUs:** Use the CUDA 12.8 configuration:
+```bash
+docker compose -f docker-compose-cu128.yml down
+docker compose -f docker-compose-cu128.yml pull
+docker compose -f docker-compose-cu128.yml up -d --build
 ```
 
 ## 💡 Usage
@@ -739,38 +952,117 @@ lspci | grep VGA
 *   **Performance:** AMD GPUs with ROCm provide excellent performance for ML workloads, with support for mixed-precision training.
 *   **PyTorch Version:** Uses PyTorch 2.6.0 with ROCm 6.4.1 for optimal compatibility and performance.
 
-## Troubleshooting
+## 🔍 Troubleshooting
 
-### **NVIDIA GPU Issues:**
-*   **GPU not detected:** Check `nvidia-smi` works on host, ensure Container Toolkit is installed
-*   **CDI device injection failed:** Open `docker-compose.yml`, comment out the `deploy` section, and uncomment the `runtime: nvidia` line as shown in the file's comments
-*   **CUDA out of memory:** Close other GPU applications, reduce `chunk_size` in the UI for long texts
+### Launcher Issues
 
-### **AMD ROCm Issues:**
-*   **GPU not detected:** 
-    - Ensure ROCm drivers are installed on host: `sudo apt install rocm-dkms rocm-libs`
-    - Verify your GPU is ROCm-compatible
-    - Check user groups: `groups $USER` should include `video` and `render`
-*   **Permission errors:** 
+*   **"Python not found" error:**
+    - Ensure Python 3.10+ is installed and added to PATH
+    - Windows: Reinstall Python and check "Add Python to PATH" during installation
+    - Linux: Install with `sudo apt install python3 python3-venv python3-pip`
+
+*   **"venv module not found" (Linux):**
     ```bash
-    sudo usermod -a -G video,render $USER
-    # Log out and back in
-    ```
-*   **Architecture not supported:** Use `HSA_OVERRIDE_GFX_VERSION` override as shown above
-*   **Still having issues:** Uncomment the "Enhanced ROCm Access" section in `docker-compose-rocm.yml`:
-    ```yaml
-    privileged: true
-    cap_add:
-      - SYS_PTRACE
-    devices:
-      - /dev/mem
+    sudo apt install python3-venv
     ```
 
-### **General Docker Issues:**
-*   **Port conflict:** Change `PORT` environment variable: `PORT=8005 docker compose up -d`
-*   **Build failures:** Ensure stable internet connection for downloading dependencies
-*   **Permission errors:** Check that Docker daemon is running and user is in `docker` group
-*   **Disk space:** Docker images and model cache can use several GB
+*   **Installation hangs or fails:**
+    - Run with verbose mode for details: `python start.py --reinstall --verbose`
+    - Check internet connection
+    - Ensure sufficient disk space (10GB+ recommended)
+
+*   **Permission errors removing venv (Windows):**
+    - Close all terminals and editors that might have files open in the venv folder
+    - Try running as Administrator
+    - Manually delete the venv folder: `rmdir /s /q venv`
+
+*   **Wrong hardware detected:**
+    - The launcher detects NVIDIA GPUs via `nvidia-smi` and AMD GPUs via `rocm-smi`
+    - If detection fails, use direct installation flags: `--cpu`, `--nvidia`, `--nvidia-cu128`, `--rocm`
+
+*   **Checking installation type:**
+    ```bash
+    # The installation type is stored in venv/.install_type
+    cat venv/.install_type  # Linux/macOS
+    type venv\.install_type  # Windows
+    ```
+
+### Apple Silicon (MPS) Issues
+
+*   **MPS Not Available:** Ensure you have macOS 12.3+ and an Apple Silicon Mac. Verify with `python -c "import torch; print(torch.backends.mps.is_available())"`
+*   **Installation Conflicts:** If you encounter version conflicts, follow the exact Apple Silicon installation sequence in Option 4, installing PyTorch first before other dependencies.
+*   **ONNX Build Errors:** Use the specific ONNX version `pip install onnx==1.16.0` as shown in the installation steps.
+*   **Model Loading Errors:** Ensure `config.yaml` has `device: mps` in the `tts_engine` section.
+
+### NVIDIA GPU Issues
+
+*   **CUDA Not Available / Slow:** Check NVIDIA drivers (`nvidia-smi`), ensure correct CUDA-enabled PyTorch is installed (see Installation options).
+*   **"No kernel image available" error:**
+    - For RTX 5090/Blackwell: Use `--nvidia-cu128` or `requirements-nvidia-cu128.txt` instead of standard NVIDIA installation
+    - For older GPUs (RTX 20/30/40): Use `--nvidia` or `requirements-nvidia.txt`
+*   **VRAM Out of Memory (OOM):**
+    *   Ensure your GPU meets minimum requirements for Chatterbox.
+    *   Close other GPU-intensive applications.
+    *   If processing very long text even with chunking, try reducing `chunk_size` (e.g., 100-150).
+
+### AMD GPU Issues
+
+*   **ROCm not working on Windows:**
+    - ROCm only supports Linux - use CPU mode on Windows with AMD GPUs
+    - The launcher will warn you if you select ROCm on Windows
+
+### General Issues
+
+*   **Import Errors (e.g., `chatterbox-tts`, `librosa`):** Ensure virtual environment is active and dependencies installed successfully. Try reinstalling: `python start.py --reinstall`
+*   **`libsndfile` Error (Linux):** Run `sudo apt install libsndfile1`.
+*   **Model Download Fails:** Check internet connection. `ChatterboxTTS.from_pretrained()` will attempt to download from Hugging Face Hub. Ensure `model.repo_id` in `config.yaml` is correct.
+*   **Voice Cloning/Predefined Voice Issues:**
+    *   Ensure files exist in the correct directories (`./reference_audio`, `./voices`).
+    *   Check server logs for errors related to file loading or processing.
+*   **Permission Errors (Saving Files/Config):** Check write permissions for `./config.yaml`, `./logs`, `./outputs`, `./reference_audio`, `./voices`, and the Hugging Face cache directory if using Docker volumes.
+*   **UI Issues / Settings Not Saving:** Clear browser cache/local storage. Check browser developer console (F12) for JavaScript errors. Ensure `config.yaml` is writable by the server process.
+*   **Port Conflict (`Address already in use`):** Another process is using the port. Stop it or change `server.port` in `config.yaml` (requires server restart).
+    - Find process using port: `netstat -ano | findstr :8004` (Windows) or `lsof -i :8004` (Linux)
+*   **Generation Cancel Button:** This is a "UI Cancel" - it stops the *frontend* from waiting but doesn't instantly halt ongoing backend model inference. Clicking Generate again cancels the previous UI wait.
+
+### Selecting GPUs on Multi-GPU Systems
+
+Set the `CUDA_VISIBLE_DEVICES` environment variable **before** running `python server.py` (or before running the launcher) to specify which GPU(s) PyTorch should see. The server uses the first visible one (effectively `cuda:0` from PyTorch's perspective).
+
+*   **Example (Use only physical GPU 1):**
+    *   Linux/macOS: `CUDA_VISIBLE_DEVICES="1" python server.py`
+    *   Windows CMD: `set CUDA_VISIBLE_DEVICES=1 && python server.py`
+    *   Windows PowerShell: `$env:CUDA_VISIBLE_DEVICES="1"; python server.py`
+
+*   **Example (Use physical GPUs 6 and 7 - server uses GPU 6):**
+    *   Linux/macOS: `CUDA_VISIBLE_DEVICES="6,7" python server.py`
+    *   Windows CMD: `set CUDA_VISIBLE_DEVICES=6,7 && python server.py`
+    *   Windows PowerShell: `$env:CUDA_VISIBLE_DEVICES="6,7"; python server.py`
+
+**Note:** `CUDA_VISIBLE_DEVICES` selects GPUs; it does **not** fix OOM errors if the chosen GPU lacks sufficient memory.
+
+### Verification Commands
+
+**Check Python version:**
+```bash
+python --version
+```
+
+**Check PyTorch and CUDA:**
+```bash
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
+```
+
+**Check PyTorch architectures (for Blackwell support):**
+```bash
+python -c "import torch; print(torch.cuda.get_arch_list())"
+```
+
+**Test server manually:**
+```bash
+# Activate venv first, then:
+python server.py
+```
 
 ## Configuration in Docker
 
