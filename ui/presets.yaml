@@ -4,161 +4,11 @@
 # varied texts for testing quality, intonation, and chunking.
 
 # ============================================================================
-# STANDARD PRESETS (Original & Turbo Compatible)
-# ============================================================================
-
-- name: "Standard Narration"
-  text: |
-    The solar system consists of the Sun and the astronomical objects gravitationally bound in orbit around it.
-    Mars, often called the Red Planet, is the fourth planet from the Sun. It is a terrestrial planet with a thin atmosphere, having surface features reminiscent both of the impact craters of the Moon and the volcanoes, valleys, deserts, and polar ice caps of Earth.
-  params:
-    temperature: 0.8
-    exaggeration: 0.4
-    cfg_weight: 0.5
-    seed: 42
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Expressive Monologue"
-  text: |
-    To be, or not to be, that is the question: whether 'tis nobler in the mind to suffer the slings and arrows of outrageous fortune, or to take arms against a sea of troubles and by opposing end them. To die: to sleep; no more; and by a sleep to say we end the heart-ache and the thousand natural shocks that flesh is heir to, 'tis a consummation devoutly to be wish'd.
-  params:
-    temperature: 0.75
-    exaggeration: 1.1
-    cfg_weight: 0.6
-    seed: 101
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Technical Explanation"
-  text: |
-    Quantum entanglement is a physical phenomenon that occurs when pairs or groups of particles are generated, interact, or share spatial proximity in ways such that the quantum state of each particle cannot be described independently of the state of the others, even when the particles are separated by a large distance. The principles of quantum mechanics assert that an object's properties are not fixed until they are measured.
-  params:
-    temperature: 0.85
-    exaggeration: 0.4
-    cfg_weight: 0.5
-    seed: 2024
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Upbeat Advertisement"
-  text: |
-    Are you tired of slow, unreliable connections? Upgrade today to Quantum Fiber, the fastest internet in the galaxy! Experience seamless streaming, lag-free gaming, and instant downloads. Call now and get your first three months half price! Don't wait, this offer won't last forever!
-  params:
-    temperature: 0.8
-    exaggeration: 1.3
-    cfg_weight: 0.45
-    seed: 3000
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Thoughtful Reflection (Chunking Test)"
-  text: |
-    The pursuit of knowledge is a journey, not a destination. Each discovery, no matter how small, illuminates a new path, revealing further questions and mysteries yet to be unraveled. It requires patience, persistence, and an unwavering curiosity about the world around us and the universe beyond. Sometimes, the most profound insights come not from grand experiments, but from quiet contemplation and the willingness to challenge our own assumptions. What we think we know today may simply be a stepping stone to a deeper understanding tomorrow. Therefore, we must remain humble in our quest, always open to new perspectives and the possibility that our current map of reality is incomplete. This continuous cycle of learning, questioning, and re-evaluating is the very essence of intellectual growth and the driving force behind human progress.
-  params:
-    temperature: 0.7
-    exaggeration: 0.4
-    cfg_weight: 0.6
-    seed: 555
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Simple Punctuation Test"
-  text: |
-    Hello! How are you today? I'm doing well, thank you. It's a beautiful day, isn't it? Yes, it is.
-  params:
-    temperature: 0.8
-    exaggeration: 0.5
-    cfg_weight: 0.5
-    seed: 1212
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Long Story Excerpt (Chunking Test)"
-  text: |
-    It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of Light, it was the season of Darkness, it was the spring of hope, it was the winter of despair, we had everything before us, we had nothing before us, we were all going direct to Heaven, we were all going direct the other way – in short, the period was so far like the present period, that some of its noisiest authorities insisted on its being received, for good or for evil, in the superlative degree of comparison only.
-    There were a king with a large jaw and a queen with a plain face, on the throne of England; there were a king with a large jaw and a queen with a fair face, on the throne of France. In both countries it was clearer than crystal to the lords of the State preserves of loaves and fishes, that things in general were settled for ever.
-    It was the year of Our Lord one thousand seven hundred and seventy-five. Spiritual revelations were conceded to England at that favoured period, as at this. Mrs. Southcott had recently attained her five-and-twentieth blessed birthday, of whom a prophetic private in the Life Guards had heralded the sublime appearance by announcing that arrangements were made for the swallowing up of London and Westminster. Even the Cock-lane ghost had been laid only a round dozen of years, after rapping out its messages, as the spirits of this year last past (supernaturally deficient in originality) rapped out theirs.
-  params:
-    temperature: 0.78
-    exaggeration: 1.1
-    cfg_weight: 0.55
-    seed: 1775
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Noir Detective Monologue"
-  text: |
-    The rain hammered the city like it had a personal vendetta. I sat in my office, the only light coming from a flickering neon sign outside that spelled out "VACANCY" in letters as broken as most of my clients' dreams. She walked in at midnight, the kind of dame that made trouble look like a vacation destination. Said her husband was missing. I knew right then this case would end with either handcuffs or heartbreak. In this town, you learn not to tell the difference. I took a long drag from my cigarette and watched the smoke curl up toward a ceiling that had heard too many confessions. The night was young, but in this business, everything ages fast.
-  params:
-    temperature: 0.75
-    exaggeration: 0.9
-    cfg_weight: 0.6
-    seed: 1947
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Children's Story Narrator"
-  text: |
-    Once upon a time, in a cozy little burrow beneath the oldest oak tree in Whispering Woods, there lived a tiny mouse named Pip. Pip had the softest gray fur, the brightest button eyes, and the most curious little nose that was always twitching at new smells. Every morning, Pip would wake up with the sun, stretch his tiny paws, and wonder what adventures the day would bring. Today was special, because today was the day of the Great Cheese Festival, and Pip had been practicing his crumb-juggling act for weeks! He straightened his tiny red scarf, grabbed his even tinier top hat, and scurried out into the golden morning light. The forest was already buzzing with excitement, and Pip's little heart was buzzing right along with it.
-  params:
-    temperature: 0.8
-    exaggeration: 0.7
-    cfg_weight: 0.5
-    seed: 888
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Motivational Speech"
-  text: |
-    Listen to me. You are standing at the edge of something great. I know it doesn't feel that way right now. I know the voice in your head is listing every reason why you should turn back, play it safe, stay small. But here's what I've learned: greatness never asks for permission. It doesn't wait until you're ready. It shows up at the most inconvenient moments and says, "What are you going to do about it?" Every single person who ever achieved anything extraordinary was once exactly where you are now: uncertain, afraid, wondering if they had what it takes. The difference between them and everyone else? They took the next step anyway. So take the step. Fall down if you have to. Get back up. Your future self is waiting for you to be brave today.
-  params:
-    temperature: 0.8
-    exaggeration: 1.2
-    cfg_weight: 0.55
-    seed: 2025
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Scientific Abstract Reading"
-  text: |
-    Recent advances in neural network architectures have demonstrated remarkable capabilities in natural language understanding and generation. This study presents a comprehensive analysis of transformer-based models, examining their attention mechanisms and their emergent properties at scale. Our findings indicate that model performance scales predictably with compute resources, following established power laws, while exhibiting phase transitions in capability acquisition. We further investigate the role of training data composition and propose a novel preprocessing methodology that improves downstream task performance by approximately eighteen percent across standard benchmarks. These results have significant implications for the development of more efficient and capable language models.
-  params:
-    temperature: 0.7
-    exaggeration: 0.3
-    cfg_weight: 0.5
-    seed: 4096
-    speed_factor: 1.0
-    language: "en"
-
-- name: "Fairy Tale Villain Monologue"
-  text: |
-    You think you've won, don't you? Standing there with your righteous sword and your noble heart. How delightfully naive. I've been playing this game since before your grandmother's grandmother was a whisper in the wind. Every move you've made, every clever plan, every supposed victory — all pieces on my board, my dear hero. You see a villain who lost. I see a centuries-old design finally coming to fruition. The curse you think you've broken? It was merely the lock. And you, sweet child, have just handed me the key. Now, if you'll excuse me, I have a kingdom to reshape in my image. Don't look so surprised. In every story, someone has to play the monster. I simply chose to be the very best.
-  params:
-    temperature: 0.8
-    exaggeration: 1.3
-    cfg_weight: 0.6
-    seed: 666
-    speed_factor: 1.0
-    language: "en"
-
-# ============================================================================
 # ⚡ TURBO MODEL DEMONSTRATIONS (Paralinguistic Tags)
 # ============================================================================
 # These presets utilize tags supported ONLY by the Chatterbox Turbo model.
 # Tags: [laugh], [chuckle], [sigh], [gasp], [cough], [clear throat], [sniff], [groan], [shush]
-# If used with the Original model, these tags will be spoken literally.
-
-- name: "⚡ Turbo: The Haunted House Tour Guide"
-  text: |
-    [clear throat] Welcome, brave souls, to Ravenswood Manor! [chuckle] Don't worry, I'm mostly joking when I say brave. [gasp] Oh my, did you see that shadow move in the window up there? [laugh] Just kidding, that's just old Edgar, our resident ghost. He's harmless... mostly. [sigh] Now, as we enter the main foyer, please watch your step. The floorboards are original from 1847, and they do have a tendency to [groan] well, groan like that, yes. [sniff] Can you smell that? Roses and decay, the signature scent of Lady Ravenswood herself. Legend has it she still tends her garden at midnight. [shush] Listen... do you hear that creaking? [gasp] That's coming from the nursery! [chuckle] Oh, it's probably just the wind. Probably. [cough] Excuse me, all this dust. Anyway, shall we proceed to the ballroom where three guests mysteriously vanished during the winter ball of 1892? [laugh] Your faces right now are absolutely priceless! [sigh] Follow me, and please, whatever you do, don't look into the mirror at the end of the hallway. They say if you stare too long... [gasp] well, let's just keep moving, shall we?
-  params:
-    temperature: 0.8
-    exaggeration: 1.3
-    cfg_weight: 0.6
-    seed: 0
-    speed_factor: 1.0
-    language: "en"
+# If used with the Original model, these tags will be spoken literally or be ignored.
 
 - name: "⚡ Turbo: Tech Support Meltdown"
   text: |
@@ -259,3 +109,71 @@
     speed_factor: 1.0
     language: "en"
 
+
+- name: "Long Story Excerpt (Chunking Test)"
+  text: |
+    It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of Light, it was the season of Darkness, it was the spring of hope, it was the winter of despair, we had everything before us, we had nothing before us, we were all going direct to Heaven, we were all going direct the other way – in short, the period was so far like the present period, that some of its noisiest authorities insisted on its being received, for good or for evil, in the superlative degree of comparison only.
+    There were a king with a large jaw and a queen with a plain face, on the throne of England; there were a king with a large jaw and a queen with a fair face, on the throne of France. In both countries it was clearer than crystal to the lords of the State preserves of loaves and fishes, that things in general were settled for ever.
+    It was the year of Our Lord one thousand seven hundred and seventy-five. Spiritual revelations were conceded to England at that favoured period, as at this. Mrs. Southcott had recently attained her five-and-twentieth blessed birthday, of whom a prophetic private in the Life Guards had heralded the sublime appearance by announcing that arrangements were made for the swallowing up of London and Westminster. Even the Cock-lane ghost had been laid only a round dozen of years, after rapping out its messages, as the spirits of this year last past (supernaturally deficient in originality) rapped out theirs.
+  params:
+    temperature: 0.78
+    exaggeration: 1.1
+    cfg_weight: 0.55
+    seed: 1775
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Noir Detective Monologue"
+  text: |
+    The rain hammered the city like it had a personal vendetta. I sat in my office, the only light coming from a flickering neon sign outside that spelled out "VACANCY" in letters as broken as most of my clients' dreams. She walked in at midnight, the kind of dame that made trouble look like a vacation destination. Said her husband was missing. I knew right then this case would end with either handcuffs or heartbreak. In this town, you learn not to tell the difference. I took a long drag from my cigarette and watched the smoke curl up toward a ceiling that had heard too many confessions. The night was young, but in this business, everything ages fast.
+  params:
+    temperature: 0.75
+    exaggeration: 0.9
+    cfg_weight: 0.6
+    seed: 1947
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Children's Story Narrator"
+  text: |
+    Once upon a time, in a cozy little burrow beneath the oldest oak tree in Whispering Woods, there lived a tiny mouse named Pip. Pip had the softest gray fur, the brightest button eyes, and the most curious little nose that was always twitching at new smells. Every morning, Pip would wake up with the sun, stretch his tiny paws, and wonder what adventures the day would bring. Today was special, because today was the day of the Great Cheese Festival, and Pip had been practicing his crumb-juggling act for weeks! He straightened his tiny red scarf, grabbed his even tinier top hat, and scurried out into the golden morning light. The forest was already buzzing with excitement, and Pip's little heart was buzzing right along with it.
+  params:
+    temperature: 0.8
+    exaggeration: 0.7
+    cfg_weight: 0.5
+    seed: 888
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Motivational Speech"
+  text: |
+    Listen to me. You are standing at the edge of something great. I know it doesn't feel that way right now. I know the voice in your head is listing every reason why you should turn back, play it safe, stay small. But here's what I've learned: greatness never asks for permission. It doesn't wait until you're ready. It shows up at the most inconvenient moments and says, "What are you going to do about it?" Every single person who ever achieved anything extraordinary was once exactly where you are now: uncertain, afraid, wondering if they had what it takes. The difference between them and everyone else? They took the next step anyway. So take the step. Fall down if you have to. Get back up. Your future self is waiting for you to be brave today.
+  params:
+    temperature: 0.8
+    exaggeration: 1.2
+    cfg_weight: 0.55
+    seed: 2025
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Scientific Abstract Reading"
+  text: |
+    Recent advances in neural network architectures have demonstrated remarkable capabilities in natural language understanding and generation. This study presents a comprehensive analysis of transformer-based models, examining their attention mechanisms and their emergent properties at scale. Our findings indicate that model performance scales predictably with compute resources, following established power laws, while exhibiting phase transitions in capability acquisition. We further investigate the role of training data composition and propose a novel preprocessing methodology that improves downstream task performance by approximately eighteen percent across standard benchmarks. These results have significant implications for the development of more efficient and capable language models.
+  params:
+    temperature: 0.7
+    exaggeration: 0.3
+    cfg_weight: 0.5
+    seed: 4096
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Fairy Tale Villain Monologue"
+  text: |
+    You think you've won, don't you? Standing there with your righteous sword and your noble heart. How delightfully naive. I've been playing this game since before your grandmother's grandmother was a whisper in the wind. Every move you've made, every clever plan, every supposed victory — all pieces on my board, my dear hero. You see a villain who lost. I see a centuries-old design finally coming to fruition. The curse you think you've broken? It was merely the lock. And you, sweet child, have just handed me the key. Now, if you'll excuse me, I have a kingdom to reshape in my image. Don't look so surprised. In every story, someone has to play the monster. I simply chose to be the very best.
+  params:
+    temperature: 0.8
+    exaggeration: 1.3
+    cfg_weight: 0.6
+    seed: 666
+    speed_factor: 1.0
+    language: "en"
