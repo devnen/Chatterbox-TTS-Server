@@ -51,8 +51,7 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 
 ### ✅ Original Chatterbox remains first‑class
 
-- The original Chatterbox models remain available (including multilingual), with support for **23 languages**, a **0.5B LLaMA backbone**, **emotion exaggeration control**, and training on **0.5M hours** of cleaned data.
-- Chatterbox outputs are **watermarked** (PerTh) for responsible AI usage.
+- The original Chatterbox model remains available, with support for high quality English language output, a **0.5B LLaMA backbone**, **emotion exaggeration control**, and training on **0.5M hours** of cleaned data.
 
 ### 🖥️ New NVIDIA / CUDA support
 
