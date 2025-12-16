@@ -1,20 +1,76 @@
-# requirements-nvidia-cu128.txt (For NVIDIA GPU Installation with CUDA 12.8)
-# This file provides CUDA 12.8 support including RTX 5090 / Blackwell architecture (sm_120)
+# ============================================================================
+# CHATTERBOX TTS SERVER - REQUIREMENTS (NVIDIA CUDA 12.8 / BLACKWELL)
+# ============================================================================
+# This file provides CUDA 12.8 support for RTX 5090 / Blackwell architecture (sm_120)
+#
 # Use this file if you have:
-# - RTX 5090 or other Blackwell GPUs
-# - CUDA 12.8+ drivers installed
-# - Need for latest PyTorch features
+# - NVIDIA RTX 5090 or other Blackwell-based GPUs
+# - CUDA 12.8+ drivers installed (driver version 570+)
+# - Need for PyTorch 2.8.0 with sm_120 support
+#
+# For RTX 20/30/40 series GPUs, use requirements-nvidia.txt instead.
+#
+# ============================================================================
+# IMPORTANT: This file does NOT include chatterbox-tts because it must be
+# installed separately with --no-deps to prevent PyTorch downgrade.
+#
+# The start.py launcher handles this automatically.
+#
+# For manual installation, run these commands in order:
+#   pip install -r requirements-nvidia-cu128.txt
+#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+# ============================================================================
 
-# Use the official PyTorch package index for CUDA 12.8
+# --- PyTorch CUDA 12.8 Package Index ---
 --extra-index-url https://download.pytorch.org/whl/cu128
 
+# --- Deep Learning Framework (CUDA 12.8) ---
 # PyTorch 2.8.0 with CUDA 12.8 - includes sm_120 (Blackwell) support
 torch==2.8.0
 torchvision==0.23.0
 torchaudio==2.8.0
 
-# --- Core Application Dependencies ---
+# --- Core Web Framework ---
+fastapi
+uvicorn[standard]
 
-# Chatterbox TTS and dependencies
-# Note: Install this separately with --no-deps to prevent PyTorch downgrade
-# pip install --no-deps git+https://github.com/devnen/chatterbox.git
+# --- ML & Audio Libraries ---
+numpy>=1.24.0,<1.26.0  # Match chatterbox-v2 requirements
+soundfile
+librosa
+safetensors
+descript-audio-codec
+
+# --- Configuration & Utilities ---
+PyYAML
+python-multipart
+requests
+Jinja2
+watchdog
+aiofiles
+unidecode
+inflect
+tqdm
+hf_transfer
+
+# --- Audio Post-processing ---
+pydub
+audiotsm
+praat-parselmouth
+
+# ============================================================================
+# INSTALLATION NOTES:
+#
+# 1. Verify your CUDA driver version supports CUDA 12.8:
+#    nvidia-smi
+#    (Look for "CUDA Version: 12.8" or higher)
+#
+# 2. After installation, verify PyTorch sees your GPU:
+#    python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0)}'); print(f'Archs: {torch.cuda.get_arch_list()}')"
+#
+# 3. You should see sm_120 in the architectures list for Blackwell support.
+#
+# 4. System dependencies may be required:
+#    - libsndfile (for soundfile package)
+#    - FFmpeg (for some audio processing features)
+# ============================================================================
