@@ -31,10 +31,23 @@ audio_output:
   max_reference_duration_sec: 30
   save_to_disk: false
 ui_state:
-  last_text: 'Are you tired of slow, unreliable connections? Upgrade today to Quantum
-    Fiber, the fastest internet in the galaxy! Experience seamless streaming, lag-free
-    gaming, and instant downloads. Call now and get your first three months half price!
-    Don''t wait, this offer won''t last forever!
+  last_text: '[gasp] Okay, we have fifteen minutes left! Fifteen minutes! [groan]
+    How have we been in here for forty-five minutes and only solved two puzzles?!
+    [clear throat] Let''s think logically. [sniff] This room smells like fear and
+    bad decisions. [cough] And also someone''s very strong cologne, Kevin. [sigh]
+    Okay, the clue says "the answer lies where time stands still." [chuckle] Great,
+    very helpful, very straightforward. [shush] Everyone stop talking for one second!
+    [gasp] Wait, the clock on the wall! It''s stuck at three fifteen! [laugh] That''s
+    it! That has to be it! [groan] It''s not the combination. Of course it''s not
+    the combination. [sniff] Why would anything in this room be logical? [sigh] Has
+    anyone checked under the carpet? [gasp] There''s a hidden compartment! [chuckle]
+    Kevin, you''re standing on a clue! Classic Kevin! [clear throat] Okay, it''s another
+    riddle. "What has keys but no locks, space but no room, and you can enter but
+    can''t go inside?" [groan] Who writes these things?! [cough] A keyboard! It''s
+    a keyboard! [laugh] There''s a keyboard painted on the wall! [gasp] Eight minutes!
+    We have eight minutes! [sigh] If we don''t escape this room, we''re never speaking
+    of this again. [shush] Focus, everyone! [chuckle] We''re so close I can taste
+    freedom! [sniff] That or more of Kevin''s cologne!
 
     '
   last_voice_mode: predefined
@@ -46,6 +59,7 @@ ui_state:
   hide_chunk_warning: false
   hide_generation_warning: false
   theme: light
+  last_preset_name: "\u26A1 Turbo: Escape Room Panic"
 ui:
   title: Chatterbox TTS Server
   show_language_select: true
