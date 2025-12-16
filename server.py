@@ -264,18 +264,41 @@ async def get_web_ui(request: Request):
         )
 
 
+# --- API Endpoint for Model Information ---
+@app.get("/api/model-info", tags=["Model Information"])
+async def get_model_info_endpoint():
+    """
+    Returns detailed information about the currently loaded TTS model.
+    This endpoint is used by the UI to display model status and
+    conditionally show features like paralinguistic tags.
+    """
+    logger.debug("Request received for /api/model-info")
+    try:
+        model_info = engine.get_model_info()
+        return model_info
+    except Exception as e:
+        logger.error(f"Error getting model info: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve model information"
+        )
+
+
 # --- API Endpoint for Initial UI Data ---
 @app.get("/api/ui/initial-data", tags=["UI Helpers"])
 async def get_ui_initial_data():
     """
     Provides all necessary initial data for the UI to render,
-    including configuration, file lists, and presets.
+    including configuration, file lists, presets, and model information.
     """
     logger.info("Request received for /api/ui/initial-data.")
     try:
         full_config = get_full_config_for_template()
         reference_files = utils.get_valid_reference_files()
         predefined_voices = utils.get_predefined_voices()
+
+        # Get model information for UI
+        model_info = engine.get_model_info()
+
         loaded_presets = []
         presets_file = ui_static_path / "presets.yaml"
         if presets_file.exists():
@@ -307,6 +330,7 @@ async def get_ui_initial_data():
             "predefined_voices": predefined_voices,
             "presets": loaded_presets,
             "initial_gen_result": initial_gen_result_placeholder,
+            "model_info": model_info,  # NEW: Include model information
         }
     except Exception as e:
         logger.error(f"Error preparing initial UI data for API: {e}", exc_info=True)
@@ -387,15 +411,38 @@ async def reset_settings_endpoint():
     "/restart_server", response_model=UpdateStatusResponse, tags=["Configuration"]
 )
 async def restart_server_endpoint():
-    """Attempts to trigger a server restart."""
-    logger.info("Request received for /restart_server.")
-    message = (
-        "Server restart initiated. If running locally without a process manager, "
-        "you may need to restart manually. For managed environments (Docker, systemd), "
-        "the manager should handle the restart."
-    )
-    logger.warning(message)
-    return UpdateStatusResponse(message=message, restart_needed=True)
+    """
+    Triggers a hot-swap of the TTS model engine.
+    Unloads the current model, clears VRAM, and loads the model defined in config.
+    """
+    logger.info("Request received for /restart_server (Model Hot-Swap).")
+
+    try:
+        # Attempt to reload the engine with the new configuration
+        success = engine.reload_model()
+
+        if success:
+            model_info = engine.get_model_info()
+            new_model_name = model_info.get("class_name", "Unknown Model")
+            new_model_type = model_info.get("type", "unknown")
+            message = f"Model hot-swap successful. Now running: {new_model_name} ({new_model_type})"
+            logger.info(message)
+
+            # restart_needed=False because we just performed the hot-swap successfully
+            return UpdateStatusResponse(message=message, restart_needed=False)
+        else:
+            error_msg = "Model reload failed. The server may be in an inconsistent state. Check logs for details."
+            logger.error(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Critical error during model hot-swap: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error during model reload: {str(e)}",
+        )
 
 
 # --- UI Helper API Endpoints ---
