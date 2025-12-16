@@ -6,21 +6,21 @@
 
 # Pinning a compatible set of torch-related libraries is crucial to avoid dependency conflicts.
 # Updated to use PyTorch 2.5.1 for compatibility with our Colab-compatible chatterbox fork
-torch==2.5.1
-torchvision==0.20.1  # Compatible with torch 2.5.1
-torchaudio==2.5.1
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchaudio==2.5.1+cu121
 
 # --- Core Application Dependencies ---
 
-# Install chatterbox from our Colab-compatible fork instead of PyPI
-git+https://github.com/devnen/chatterbox.git
+# Chatterbox TTS engine - Install from chatterbox-v2 fork
+chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master
 
 # Core Web Framework
 fastapi
 uvicorn[standard]
 
 # Other ML & Audio Libraries
-numpy>=1.26.0,<3.0.0  # More flexible to avoid conflicts
+numpy>=1.24.0,<1.26.0  # Match chatterbox-v2 requirements
 soundfile  # Requires libsndfile system library
 librosa
 safetensors
