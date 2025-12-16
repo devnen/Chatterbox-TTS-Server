@@ -2,7 +2,10 @@
 # Predefined examples for the TTS User Interface.
 # These presets are designed for a single-speaker TTS engine and provide
 # varied texts for testing quality, intonation, and chunking.
-# Each preset has a name, the text to synthesize, and 'params' for generation settings.
+
+# ============================================================================
+# STANDARD PRESETS (Original & Turbo Compatible)
+# ============================================================================
 
 - name: "Standard Narration"
   text: |
@@ -10,7 +13,7 @@
     Mars, often called the Red Planet, is the fourth planet from the Sun. It is a terrestrial planet with a thin atmosphere, having surface features reminiscent both of the impact craters of the Moon and the volcanoes, valleys, deserts, and polar ice caps of Earth.
   params:
     temperature: 0.8
-    exaggeration: 0.4 # Neutral exaggeration
+    exaggeration: 0.4
     cfg_weight: 0.5
     seed: 42
     speed_factor: 1.0
@@ -21,7 +24,7 @@
     To be, or not to be, that is the question: whether 'tis nobler in the mind to suffer the slings and arrows of outrageous fortune, or to take arms against a sea of troubles and by opposing end them. To die: to sleep; no more; and by a sleep to say we end the heart-ache and the thousand natural shocks that flesh is heir to, 'tis a consummation devoutly to be wish'd.
   params:
     temperature: 0.75
-    exaggeration: 1.1 # Higher exaggeration for dramatic effect
+    exaggeration: 1.1
     cfg_weight: 0.6
     seed: 101
     speed_factor: 1.0
@@ -32,7 +35,7 @@
     Quantum entanglement is a physical phenomenon that occurs when pairs or groups of particles are generated, interact, or share spatial proximity in ways such that the quantum state of each particle cannot be described independently of the state of the others, even when the particles are separated by a large distance. The principles of quantum mechanics assert that an object's properties are not fixed until they are measured.
   params:
     temperature: 0.85
-    exaggeration: 0.4 # Lower exaggeration for clarity
+    exaggeration: 0.4
     cfg_weight: 0.5
     seed: 2024
     speed_factor: 1.0
@@ -43,7 +46,7 @@
     Are you tired of slow, unreliable connections? Upgrade today to Quantum Fiber, the fastest internet in the galaxy! Experience seamless streaming, lag-free gaming, and instant downloads. Call now and get your first three months half price! Don't wait, this offer won't last forever!
   params:
     temperature: 0.8
-    exaggeration: 1.3 # More energy
+    exaggeration: 1.3
     cfg_weight: 0.45
     seed: 3000
     speed_factor: 1.0
@@ -83,3 +86,176 @@
     seed: 1775
     speed_factor: 1.0
     language: "en"
+
+- name: "Noir Detective Monologue"
+  text: |
+    The rain hammered the city like it had a personal vendetta. I sat in my office, the only light coming from a flickering neon sign outside that spelled out "VACANCY" in letters as broken as most of my clients' dreams. She walked in at midnight, the kind of dame that made trouble look like a vacation destination. Said her husband was missing. I knew right then this case would end with either handcuffs or heartbreak. In this town, you learn not to tell the difference. I took a long drag from my cigarette and watched the smoke curl up toward a ceiling that had heard too many confessions. The night was young, but in this business, everything ages fast.
+  params:
+    temperature: 0.75
+    exaggeration: 0.9
+    cfg_weight: 0.6
+    seed: 1947
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Children's Story Narrator"
+  text: |
+    Once upon a time, in a cozy little burrow beneath the oldest oak tree in Whispering Woods, there lived a tiny mouse named Pip. Pip had the softest gray fur, the brightest button eyes, and the most curious little nose that was always twitching at new smells. Every morning, Pip would wake up with the sun, stretch his tiny paws, and wonder what adventures the day would bring. Today was special, because today was the day of the Great Cheese Festival, and Pip had been practicing his crumb-juggling act for weeks! He straightened his tiny red scarf, grabbed his even tinier top hat, and scurried out into the golden morning light. The forest was already buzzing with excitement, and Pip's little heart was buzzing right along with it.
+  params:
+    temperature: 0.8
+    exaggeration: 0.7
+    cfg_weight: 0.5
+    seed: 888
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Motivational Speech"
+  text: |
+    Listen to me. You are standing at the edge of something great. I know it doesn't feel that way right now. I know the voice in your head is listing every reason why you should turn back, play it safe, stay small. But here's what I've learned: greatness never asks for permission. It doesn't wait until you're ready. It shows up at the most inconvenient moments and says, "What are you going to do about it?" Every single person who ever achieved anything extraordinary was once exactly where you are now: uncertain, afraid, wondering if they had what it takes. The difference between them and everyone else? They took the next step anyway. So take the step. Fall down if you have to. Get back up. Your future self is waiting for you to be brave today.
+  params:
+    temperature: 0.8
+    exaggeration: 1.2
+    cfg_weight: 0.55
+    seed: 2025
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Scientific Abstract Reading"
+  text: |
+    Recent advances in neural network architectures have demonstrated remarkable capabilities in natural language understanding and generation. This study presents a comprehensive analysis of transformer-based models, examining their attention mechanisms and their emergent properties at scale. Our findings indicate that model performance scales predictably with compute resources, following established power laws, while exhibiting phase transitions in capability acquisition. We further investigate the role of training data composition and propose a novel preprocessing methodology that improves downstream task performance by approximately eighteen percent across standard benchmarks. These results have significant implications for the development of more efficient and capable language models.
+  params:
+    temperature: 0.7
+    exaggeration: 0.3
+    cfg_weight: 0.5
+    seed: 4096
+    speed_factor: 1.0
+    language: "en"
+
+- name: "Fairy Tale Villain Monologue"
+  text: |
+    You think you've won, don't you? Standing there with your righteous sword and your noble heart. How delightfully naive. I've been playing this game since before your grandmother's grandmother was a whisper in the wind. Every move you've made, every clever plan, every supposed victory — all pieces on my board, my dear hero. You see a villain who lost. I see a centuries-old design finally coming to fruition. The curse you think you've broken? It was merely the lock. And you, sweet child, have just handed me the key. Now, if you'll excuse me, I have a kingdom to reshape in my image. Don't look so surprised. In every story, someone has to play the monster. I simply chose to be the very best.
+  params:
+    temperature: 0.8
+    exaggeration: 1.3
+    cfg_weight: 0.6
+    seed: 666
+    speed_factor: 1.0
+    language: "en"
+
+# ============================================================================
+# ⚡ TURBO MODEL DEMONSTRATIONS (Paralinguistic Tags)
+# ============================================================================
+# These presets utilize tags supported ONLY by the Chatterbox Turbo model.
+# Tags: [laugh], [chuckle], [sigh], [gasp], [cough], [clear throat], [sniff], [groan], [shush]
+# If used with the Original model, these tags will be spoken literally.
+
+- name: "⚡ Turbo: The Haunted House Tour Guide"
+  text: |
+    [clear throat] Welcome, brave souls, to Ravenswood Manor! [chuckle] Don't worry, I'm mostly joking when I say brave. [gasp] Oh my, did you see that shadow move in the window up there? [laugh] Just kidding, that's just old Edgar, our resident ghost. He's harmless... mostly. [sigh] Now, as we enter the main foyer, please watch your step. The floorboards are original from 1847, and they do have a tendency to [groan] well, groan like that, yes. [sniff] Can you smell that? Roses and decay, the signature scent of Lady Ravenswood herself. Legend has it she still tends her garden at midnight. [shush] Listen... do you hear that creaking? [gasp] That's coming from the nursery! [chuckle] Oh, it's probably just the wind. Probably. [cough] Excuse me, all this dust. Anyway, shall we proceed to the ballroom where three guests mysteriously vanished during the winter ball of 1892? [laugh] Your faces right now are absolutely priceless! [sigh] Follow me, and please, whatever you do, don't look into the mirror at the end of the hallway. They say if you stare too long... [gasp] well, let's just keep moving, shall we?
+  params:
+    temperature: 0.8
+    exaggeration: 1.3
+    cfg_weight: 0.6
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: Tech Support Meltdown"
+  text: |
+    [sigh] Thank you for calling technical support, my name is Dave and I'll be assisting you today. [sniff] So you're telling me your computer just... exploded? [gasp] Wait, actual flames? Sir, that's not a software issue! [groan] Okay, okay, let me just... [clear throat] Let me pull up your account. [cough] Excuse me. Now, when you say you tried to fix it yourself, what exactly did you do? [gasp] You put it in the dishwasher?! To clean the viruses out?! [laugh] I'm sorry, I shouldn't laugh, but that's not... [sigh] Sir, computers don't work like that. [chuckle] No, the spin cycle does not remove malware. [groan] Please tell me you didn't also... [gasp] You microwaved the hard drive to speed it up? [sniff] I need a moment. [sigh] Okay, Dave, you can do this. [clear throat] Sir, I'm going to transfer you to our replacement department, and might I suggest, with the utmost respect, perhaps consider taking a basic computer literacy course? [cough] Also, maybe keep a fire extinguisher nearby in the future. [laugh] Best of luck to you!
+  params:
+    temperature: 0.85
+    exaggeration: 1.2
+    cfg_weight: 0.55
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: The Overly Dramatic Chef"
+  text: |
+    [gasp] This is a disaster! An absolute catastrophe! [groan] The soufflé has fallen, and with it, my will to live! [sigh] Twenty years I have trained for this moment, and the universe conspires against me! [sniff] Do you smell that? That's the aroma of defeat! Of crushed dreams! [cough] And also burnt garlic, someone check station three! [clear throat] Listen to me, all of you! We have forty-five minutes until the food critics arrive. [shush] Do you hear that silence? That is the sound of our restaurant's reputation hanging by a thread! [laugh] But you know what? I refuse to surrender! [chuckle] They thought I was finished after the spaghetti incident of 2019, but I rose from those ashes like a phoenix! A very well-seasoned phoenix! [gasp] Wait, who put cilantro in the béarnaise?! [groan] This cannot be happening! [sigh] Okay, new plan. Everyone, gather around. [sniff] We're going to rebuild this soufflé from scratch, and it will be glorious! [cough] Or we'll all be looking for new jobs tomorrow. [laugh] No pressure! Let's cook!
+  params:
+    temperature: 0.8
+    exaggeration: 1.4
+    cfg_weight: 0.6
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: Conspiracy Podcast Host"
+  text: |
+    [clear throat] Welcome back, truth seekers, to another episode of "What They Don't Want You To Know." [sniff] Now, before we begin, I need you to really open your minds here. [sigh] I know, I know, last week's episode about sentient shopping carts was controversial, but hear me out on this one. [gasp] Did you know that pigeons don't actually exist? [chuckle] I can hear you laughing through your earbuds, but the evidence is overwhelming! [cough] Sorry, allergies. Or is it government-released pollen designed to suppress our critical thinking? [laugh] I'm kidding. Mostly. [shush] Now listen carefully. Have you ever actually seen a baby pigeon? [gasp] Exactly! Nobody has! Because they're manufactured in underground facilities and released fully grown! [groan] The mainstream media won't touch this story, obviously. [sniff] Follow the breadcrumbs, literally. Why do pigeons love breadcrumbs? [sigh] Because it's their charging mechanism! [chuckle] Look, I'm not saying I have all the answers here. [clear throat] But I am saying that if you see a pigeon staring at you for too long, it's uploading your face to a database somewhere. [laugh] Remember to like, subscribe, and for the love of truth, stop feeding the surveillance birds! [gasp] What was that noise?! [cough] We'll be right back after this break!
+  params:
+    temperature: 0.85
+    exaggeration: 1.25
+    cfg_weight: 0.55
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: First-Time Skydiver"
+  text: |
+    [gasp] Wait, we're how high up?! [laugh] No, no, I'm fine, I'm totally fine! [sigh] I signed up for this. I paid money for this. This was my bucket list idea. [groan] Why did I have a bucket list? Buckets are for staying on the ground! [clear throat] Okay, okay, the instructor said this is completely safe. [sniff] Is it getting hard to breathe up here or is that just my crushing anxiety? [cough] No, that's definitely the altitude. [shush] Okay, I need to focus. Breathing exercises. In through the nose... [gasp] Oh no, we're approaching the door! [chuckle] That's just a giant hole in the side of a perfectly good airplane! Totally normal! [groan] My legs feel like spaghetti. Uncooked spaghetti that's about to be thrown out of a plane. [sigh] The instructor is giving me a thumbs up. That's reassuring. That's very reassuring. [laugh] Is my nervous laughter concerning anyone else?! [gasp] Three! Two! One! [sniff] Oh wow... [sigh] It's actually... beautiful up here! [laugh] I'M FLYING! THIS IS AMAZING! [chuckle] I take back everything I said! [gasp] Wait, when do I pull the cord again?!
+  params:
+    temperature: 0.8
+    exaggeration: 1.35
+    cfg_weight: 0.6
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: The Overworked Parent's Bedtime Story"
+  text: |
+    [sigh] Okay, once upon a time there was a princess. [groan] No, you're right, we did princess yesterday. Fine, a dragon. [cough] Excuse me. So there was this dragon, and he lived in a cave. [sniff] A very nice cave with excellent property values. [chuckle] No, dragons don't pay rent, they just take caves. That's called squatting. Never mind, forget I said that. [clear throat] Anyway, the dragon was very lonely because... [gasp] What do you mean you want a glass of water? You just had water! [sigh] Fine, here's your water. [groan] Where was I? Right, lonely dragon. So he decided to make friends with the village nearby. [laugh] No, he didn't eat anyone! This is a friendly dragon! [shush] Lower your voice, your sister is sleeping. [sniff] So the dragon brought everyone cookies. [cough] Yes, dragons can bake. [chuckle] It's a magical world, anything is possible. Except sleeping through the night, apparently. [sigh] And they all became best friends and lived happily ever after and went to sleep immediately. The end! [gasp] What do you mean what happened next? That's the whole story! [groan] Okay, okay, one more chapter. [sigh] The dragon also had a pet... unicorn. And the unicorn's name was... [sniff] Please Fall Asleep the Third. And the unicorn's special power was making children very, very drowsy...
+  params:
+    temperature: 0.75
+    exaggeration: 1.1
+    cfg_weight: 0.55
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: Escape Room Panic"
+  text: |
+    [gasp] Okay, we have fifteen minutes left! Fifteen minutes! [groan] How have we been in here for forty-five minutes and only solved two puzzles?! [clear throat] Let's think logically. [sniff] This room smells like fear and bad decisions. [cough] And also someone's very strong cologne, Kevin. [sigh] Okay, the clue says "the answer lies where time stands still." [chuckle] Great, very helpful, very straightforward. [shush] Everyone stop talking for one second! [gasp] Wait, the clock on the wall! It's stuck at three fifteen! [laugh] That's it! That has to be it! [groan] It's not the combination. Of course it's not the combination. [sniff] Why would anything in this room be logical? [sigh] Has anyone checked under the carpet? [gasp] There's a hidden compartment! [chuckle] Kevin, you're standing on a clue! Classic Kevin! [clear throat] Okay, it's another riddle. "What has keys but no locks, space but no room, and you can enter but can't go inside?" [groan] Who writes these things?! [cough] A keyboard! It's a keyboard! [laugh] There's a keyboard painted on the wall! [gasp] Eight minutes! We have eight minutes! [sigh] If we don't escape this room, we're never speaking of this again. [shush] Focus, everyone! [chuckle] We're so close I can taste freedom! [sniff] That or more of Kevin's cologne!
+  params:
+    temperature: 0.85
+    exaggeration: 1.3
+    cfg_weight: 0.6
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: Nature Documentary Narrator Gone Wrong"
+  text: |
+    [clear throat] Here we observe the majestic suburban dad in his natural habitat: the backyard barbecue. [sniff] Notice the distinct aroma of charcoal and mild panic. [chuckle] He approaches the grill with confidence, though his internal monologue suggests he has no idea what he's doing. [gasp] Oh! A grease flare! The suburban dad stumbles backward, nearly toppling into the kiddie pool! [laugh] A narrow escape! [sigh] His mate watches from the kitchen window, debating whether to intervene. [cough] Excuse me. She wisely chooses to let natural selection run its course. [groan] The burgers appear to be transitioning from raw to charcoal, skipping the "cooked" phase entirely. [shush] Listen... that sizzling sound is the call of dinner being ruined. [gasp] But wait! The suburban dad has produced his secret weapon: barbecue sauce! [chuckle] He believes this will mask his culinary failures. Spoiler alert: it will not. [sniff] Now he's being approached by his offspring, demanding to know when the food will be ready. [sigh] A dangerous moment. [clear throat] The suburban dad responds with the ancient phrase passed down through generations: "Five more minutes." [laugh] We all know this is a lie. [groan] And so the cycle continues, as it has for millennia, in backyards across the land. [cough] Truly, nature is magnificent.
+  params:
+    temperature: 0.8
+    exaggeration: 1.2
+    cfg_weight: 0.55
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: The Emotional Movie Reviewer"
+  text: |
+    [sniff] So I just finished watching this film, and I'm not okay. I'm really not okay. [sigh] They told me it was a "heartwarming family movie" and I walked in expecting some laughs, maybe a few feel-good moments. [gasp] They did not warn me about the dog. They did NOT warn me about what happens to the dog! [groan] I'm a grown adult, and I was openly weeping in the theater! [laugh] The guy next to me offered me his popcorn out of pity! [cough] Excuse me, I'm still recovering. [clear throat] Now, from a technical standpoint, the cinematography was excellent. [sniff] The score was absolutely devastating, in the best possible way. [chuckle] My only complaint is that they emotionally manipulated me so effectively that I may never trust a movie poster again. [sigh] Those lying, deceitful posters with their happy families and golden retrievers. [gasp] Don't even get me started on the flashback montage! [groan] Who authorized that montage?! [shush] I'm trying to compose myself here. [laugh] So, final rating: ten out of ten, absolutely would not recommend unless you enjoy having your heart removed and stomped on. [sniff] I'm going to go hug my pets now. [cough] This is the emotional movie reviewer signing off. [sigh] Stay hydrated, folks. You'll need the extra fluids for the tears.
+  params:
+    temperature: 0.8
+    exaggeration: 1.25
+    cfg_weight: 0.6
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
+- name: "⚡ Turbo: Nervous Wedding Toast"
+  text: |
+    [clear throat] Um, hi everyone. [cough] Excuse me. So, when Jessica asked me to be her maid of honor, I cried. [laugh] Not graceful tears either, like ugly sobbing. [sniff] We've been friends for fifteen years, and I cannot believe we're here today. [sigh] Okay, I promised myself I wouldn't cry during this speech, so let's see how long that lasts. [chuckle] For those who don't know, I met Jessica in college when she accidentally set fire to our dorm microwave. [gasp] It was a small fire! Very small! [laugh] And I knew right then that this was someone who would keep life interesting. [groan] I was right, by the way. Life with Jessica is never boring. [sniff] She once convinced me to do karaoke at a biker bar. [cough] I do not want to talk about what we sang. [clear throat] But here's what I do want to say. [sigh] Jessica is the most loyal, the most kind, and the most ridiculously stubborn person I know. [chuckle] Marcus, you're getting a good one, but also, good luck. [laugh] She will argue about pineapple on pizza until her dying breath. [shush] But she loves with her whole heart, and I know she loves you. [sniff] So please raise your glasses. [gasp] Wait, I'm not done! [sigh] Sorry, I'm nervous. [clear throat] To Jessica and Marcus: may your love be as enduring as Jessica's grudge against that one restaurant that got her order wrong in 2019. [laugh] She still won't go back. [sniff] Cheers, everyone!
+  params:
+    temperature: 0.75
+    exaggeration: 1.15
+    cfg_weight: 0.55
+    seed: 0
+    speed_factor: 1.0
+    language: "en"
+
