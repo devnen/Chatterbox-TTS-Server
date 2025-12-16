@@ -49,7 +49,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "log_file_backup_count": 5,  # Number of backup log files to keep.
     },
     "model": {  # Added section for model source configuration
-        "repo_id": "ResembleAI/chatterbox",  # Default Hugging Face repository ID for the model
+        "repo_id": "chatterbox-turbo",  # UPDATED: Default to Turbo model
     },
     "tts_engine": {
         "device": "auto",  # TTS processing device: 'auto', 'cuda', 'mps', or 'cpu'.
