@@ -1,12 +1,12 @@
 # Chatterbox TTS Server: OpenAI-Compatible API with Web UI, Large Text Handling & Built-in Voices
 
-**Self-host the powerful [Chatterbox TTS model](https://github.com/resemble-ai/chatterbox) with this enhanced FastAPI server! Features an intuitive Web UI, a flexible API endpoint, voice cloning, large text processing via intelligent chunking, audiobook generation, and consistent, reproducible voices using built-in ready-to-use voices and a generation seed feature.**
+**Self-host Resemble AI's [Chatterbox](https://github.com/resemble-ai/chatterbox) open-source TTS family (Original + Chatterbox‑Turbo) behind an OpenAI‑compatible API and a modern Web UI. Chatterbox‑Turbo is a streamlined 350M-parameter model with dramatically improved throughput and native paralinguistic tags like `[laugh]`, `[cough]`, and `[chuckle]` for more expressive voice agents and narration. Features voice cloning, large text processing via intelligent chunking, audiobook generation, and consistent, reproducible voices using built-in ready-to-use voices and a generation seed feature.**
 
 > 🚀 **Try it now!** Test the full TTS server with voice cloning and audiobook generation in Google Colab - no installation required!
 > 
 > [![Open Live Demo](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devnen/Chatterbox-TTS-Server/blob/main/Chatterbox_TTS_Colab_Demo.ipynb)
 
-This server is based on the architecture and UI of our [Dia-TTS-Server](https://github.com/devnen/Dia-TTS-Server) project but uses the distinct `chatterbox-tts` engine. Runs accelerated on NVIDIA (CUDA), AMD (ROCm), and Apple Silicon (MPS) GPUs, with a fallback to CPU.
+This server is based on the architecture and UI of our [Dia-TTS-Server](https://github.com/devnen/Dia-TTS-Server) project but uses the distinct `chatterbox-tts` engine. Runs accelerated on NVIDIA (CUDA), AMD (ROCm), and Apple Silicon (MPS) GPUs, with a fallback to CPU. Make sure you also check our [Kitten-TTS-Server](https://github.com/devnen/Kitten-TTS-Server) project.
 
 [![Project Link](https://img.shields.io/badge/GitHub-devnen/Chatterbox--TTS--Server-blue?style=for-the-badge&logo=github)](https://github.com/devnen/Chatterbox-TTS-Server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
@@ -28,6 +28,45 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 
 ---
 
+## 🆕 What's New
+
+### ⚡ Chatterbox‑Turbo support (new)
+
+- Added full support for **Chatterbox‑Turbo**, Resemble AI's latest efficiency-focused Chatterbox model.
+- Turbo is built on a **streamlined 350M‑parameter architecture**, designed to use less compute/VRAM while keeping high-fidelity output.
+- Turbo distills the speech-token-to-mel "audio diffusion decoder" from **10 steps → 1 step**, removing a major inference bottleneck.
+- Resemble positions Turbo for real-time/agent workflows and highlights significantly faster-than-real-time performance on GPU (performance varies by hardware/settings).
+
+### 🔁 Hot‑swappable TTS engines (UI)
+
+- Added a new **engine selector** dropdown at the top of the Web UI.
+- Instantly hot-swap between **Original Chatterbox** and **Chatterbox‑Turbo**; the backend auto-loads the selected engine.
+- All UI + API requests route through the active engine so you can A/B test quality vs latency without changing client code.
+
+### 🎭 Paralinguistic tags (Turbo)
+
+- Turbo adds **native paralinguistic tags** you can write directly into your text, e.g. `…calling you back [chuckle]…`.
+- Supported tags include `[laugh]`, `[cough]`, and `[chuckle]`, plus text-based prompting for reactions like sigh, gasp, and cough.
+- Added **new presets** in `ui/presets.yaml` demonstrating paralinguistic prompting for agent-style scripts and expressive reads.
+
+### ✅ Original Chatterbox remains first‑class
+
+- The original Chatterbox models remain available (including multilingual), with support for **23 languages**, a **0.5B LLaMA backbone**, **emotion exaggeration control**, and training on **0.5M hours** of cleaned data.
+- Chatterbox outputs are **watermarked** (PerTh) for responsible AI usage.
+
+### 🖥️ New NVIDIA / CUDA support
+
+- Updated to support **NVIDIA CUDA 12.8** and **RTX 5090 / Blackwell** generation GPUs.
+
+### 🧰 Automated launcher + easy updates
+
+- New **Automated Launcher** (Windows + Linux) that creates/activates a venv, installs the right dependencies, downloads model files, starts the server, and opens the Web UI.
+- Easy maintenance commands:
+  - `--upgrade` to update code + dependencies.
+  - `--reinstall` for a clean reinstall when environments get messy.
+
+---
+
 ## 🗣️ Overview: Enhanced Chatterbox TTS Generation
 
 The [Chatterbox TTS model by Resemble AI](https://github.com/resemble-ai/chatterbox) provides capabilities for generating high-quality speech. This project builds upon that foundation by providing a robust [FastAPI](https://fastapi.tiangolo.com/) server that makes Chatterbox significantly easier to use and integrate.
@@ -37,6 +76,9 @@ The [Chatterbox TTS model by Resemble AI](https://github.com/resemble-ai/chatter
 The server expects plain text input for synthesis and we solve the complexity of setting up and running the model by offering:
 
 *   A **modern Web UI** for easy experimentation, preset loading, reference audio management, and generation parameter tuning.
+*   **Multi-engine support (Original + Turbo):** Choose the TTS engine directly in the Web UI, then generate via the same UI/API surface.
+*   **Paralinguistic prompting (Turbo):** Native tags like `[laugh]`, `[cough]`, and `[chuckle]` for natural non-speech reactions inside the same generated voice.
+*   **Original Chatterbox strengths:** High quality English output plus unique "emotion exaggeration control" and 0.5B LLaMA backbone.
 *   **Multi-Platform Acceleration:** Full support for **NVIDIA (CUDA)**, **AMD (ROCm)**, and **Apple Silicon (MPS)** GPUs, with an automatic fallback to **CPU**, ensuring you can run on any hardware.
 *   **Large Text Handling:** Intelligently splits long plain text inputs into manageable chunks based on sentence structure, processes them sequentially, and seamlessly concatenates the audio.
 *   **📚 Audiobook Generation:** Perfect for creating complete audiobooks - simply paste an entire book's text and the server automatically processes it into a single, seamless audio file with consistent voice quality throughout.
@@ -56,6 +98,13 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 
 **🚀 Core Functionality:**
 
+*   **Multi-Engine Support:**
+    *   Choose between **Original Chatterbox** and **Chatterbox‑Turbo** via a hot-swappable engine selector in the Web UI.
+    *   Turbo offers significantly faster inference with a streamlined 350M-parameter architecture.
+    *   Original Chatterbox provides multilingual support (23 languages) and emotion exaggeration control.
+*   **Paralinguistic Tags (Turbo):**
+    *   Write native tags like `[laugh]`, `[cough]`, and `[chuckle]` directly in your text when using Chatterbox‑Turbo.
+    *   New presets demonstrate paralinguistic prompting for agent-style scripts and expressive narration.
 *   **Large Text Processing (Chunking):**
     *   Automatically handles long plain text inputs by intelligently splitting them into smaller chunks based on sentence boundaries.
     *   Processes each chunk individually and seamlessly concatenates the resulting audio, overcoming potential generation limits of the TTS engine.
@@ -96,12 +145,16 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 *   **Core Chatterbox Capabilities (via [Resemble AI Chatterbox](https://github.com/resemble-ai/chatterbox)):**
     *   🗣️ High-quality single-speaker voice synthesis from plain text.
     *   🎤 Perform voice cloning using reference audio prompts.
+    *   ⚡ **Chatterbox‑Turbo** for significantly faster inference with paralinguistic tag support.
+    *   🌍 **Original Chatterbox** with high quality English output and emotion exaggeration control.
 *   **Enhanced Server & API:**
     *   ⚡ Built with the high-performance **[FastAPI](https://fastapi.tiangolo.com/)** framework.
     *   ⚙️ **Custom API Endpoint** (`/tts`) as the primary method for programmatic generation, exposing all key parameters.
     *   📄 Interactive API documentation via Swagger UI (`/docs`).
     *   🩺 Health check endpoint (`/api/ui/initial-data` also serves as a comprehensive status check).
 *   **Advanced Generation Features:**
+    *   🔁 **Hot-Swappable Engines:** Switch between Original Chatterbox and Chatterbox‑Turbo directly in the Web UI.
+    *   🎭 **Paralinguistic Tags (Turbo):** Native support for `[laugh]`, `[cough]`, `[chuckle]` and other expressive tags.
     *   📚 **Large Text Handling:** Intelligently splits long plain text inputs into chunks based on sentences, generates audio for each, and concatenates the results seamlessly. Configurable via `split_text` and `chunk_size`.
     *   📖 **Audiobook Creation:** Perfect for generating complete audiobooks from full-length texts with consistent voice quality and automatic chapter handling.
     *   🎤 **Predefined Voices:** Select from curated synthetic voices in the `./voices` directory.
@@ -110,6 +163,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
     *   🔇 **Audio Post-Processing:** Optional automatic steps to trim silence, fix internal pauses, and remove long unvoiced segments/artifacts (configurable via `config.yaml`).
 *   **Intuitive Web User Interface:**
     *   🖱️ Modern, easy-to-use interface.
+    *   🔁 **Engine Selector:** Hot-swap between Original Chatterbox and Chatterbox‑Turbo.
     *   💡 **Presets:** Load example text and settings dynamically from `ui/presets.yaml`.
     *   🎤 **Reference/Predefined Audio Upload:** Easily upload `.wav`/`.mp3` files.
     *   🗣️ **Voice Mode Selection:** Choose between Predefined Voices or Voice Cloning.
@@ -776,16 +830,28 @@ docker compose -f docker-compose-cu128.yml up -d --build
 
 The most intuitive way to use the server:
 
+*   **Engine Selector:** Use the dropdown at the top to switch between **Original Chatterbox** and **Chatterbox‑Turbo**. The backend auto-loads the selected engine.
 *   **Text Input:** Enter your plain text script. **For audiobooks:** Simply paste the entire book text - the chunking system will automatically handle long texts and create seamless audio output.   
 *   **Voice Mode:** Choose:
     *   `Predefined Voices`: Select a curated voice from the `./voices` directory.
     *   `Voice Cloning`: Select an uploaded reference file from `./reference_audio`.
-*   **Presets:** Load examples from `ui/presets.yaml`.
+*   **Presets:** Load examples from `ui/presets.yaml`. New presets demonstrate Turbo's paralinguistic tags.
 *   **Reference/Predefined Audio Management:** Import new files and refresh lists.
 *   **Generation Parameters:** Adjust Temperature, Exaggeration, CFG Weight, Speed Factor, Seed. Save defaults to `config.yaml`.
 *   **Chunking Controls:** Toggle "Split text into chunks" and adjust "Chunk Size" for long texts.
 *   **Server Configuration:** View/edit parts of `config.yaml` (requires server restart for some changes).
 *   **Audio Player:** Play generated audio with waveform visualization.
+
+### Using Paralinguistic Tags (Turbo)
+
+When the engine selector is set to **Chatterbox‑Turbo**, you can include paralinguistic tags inline:
+
+```
+Hi there [chuckle] — thanks for calling back.
+One moment… [cough] sorry about that. Let's get this fixed.
+```
+
+Turbo supports native tags like `[laugh]`, `[cough]`, and `[chuckle]` for more realistic, expressive speech. These tags are ignored when using Original Chatterbox.
 
 ### API Endpoints (`/docs` for interactive details)
 
