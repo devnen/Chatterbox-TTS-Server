@@ -1,44 +1,41 @@
 <!DOCTYPE html>
-<html lang="en" class="dark"> <!-- Default to dark mode, script will manage preference -->
+<html lang="en" class="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chatterbox TTS Server</title>
-
-    <!--
-      Local and third-party assets.
-      - styles.css: Pre-compiled stylesheet containing all Tailwind and custom component styles.
-      - wavesurfer.min.js: The WaveSurfer.js library for audio visualization, served locally.
-    -->
     <link rel="stylesheet" href="styles.css">
     <script src="vendor/wavesurfer.min.js"></script>
 </head>
 
-<body class="body-base">
-    <div class="min-h-full">
+<body>
+    <div class="page">
         <!-- Navigation Bar -->
-        <nav class="nav-base">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="flex h-16 items-center justify-between">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <a href="/" id="app-title-link" class="title-link">Chatterbox TTS Server</a>
+        <nav class="navbar">
+            <div class="container">
+                <div class="navbar__inner">
+                    <div class="navbar__brand">
+                        <a href="/" id="app-title-link" class="navbar__title">Chatterbox TTS Server</a>
+                        <div id="model-indicator" class="hidden">
+                            <span id="model-badge" class="model-badge">
+                                <span id="model-badge-icon" class="model-badge__indicator"></span>
+                                <span id="model-badge-text">Loading...</span>
+                            </span>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-3 sm:space-x-4">
-                        <a href="/docs" target="_blank" class="nav-link">API Docs</a>
-                        <button id="theme-toggle-btn" type="button" class="theme-switch-button"
-                            title="Toggle light/dark mode">
+                    <div class="navbar__actions">
+                        <a href="/docs" target="_blank" class="navbar__link">API Docs</a>
+                        <button id="theme-toggle-btn" type="button" class="theme-toggle" title="Toggle light/dark mode">
                             <span class="sr-only">Toggle theme</span>
-                            <span class="theme-switch-thumb">
-                                <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                    fill="currentColor">
+                            <span class="theme-toggle__thumb">
+                                <svg class="theme-toggle__icon-sun" xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24" fill="currentColor">
                                     <path
                                         d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
                                 </svg>
-                                <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                    fill="currentColor">
+                                <svg class="theme-toggle__icon-moon" xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24" fill="currentColor">
                                     <path fill-rule="evenodd"
                                         d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z"
                                         clip-rule="evenodd" />
@@ -52,86 +49,134 @@
 
         <!-- Main Content Area -->
         <main>
-            <div class="mx-auto max-w-7xl px-4 py-1 sm:px-6 lg:px-8">
+            <div class="container mt-4">
+                <div id="notification-area" class="mb-6"></div>
 
-                <div id="notification-area" class="mb-6 space-y-3"></div>
+                <div class="card">
+                    <form id="tts-form" action="#" method="post" onsubmit="return false;">
+                        <div class="card__body">
+                            <h2 id="tts-form-header" class="card__title">Generate Speech</h2>
 
-                <div class="card-base">
-                    <form id="tts-form" action="#" method="post" class="flex flex-col" onsubmit="return false;">
-                        <div class="p-6 sm:p-8">
-                            <h2 id="tts-form-header" class="card-header">Generate Speech</h2>
+                            <!-- Model Selection Section -->
+                            <div id="model-selection-section" class="highlight-box">
+                                <div class="highlight-box__row">
+                                    <div class="form-group inline">
+                                        <label for="model-select" class="form-label">Active Model:</label>
+                                        <select id="model-select" name="model_selector" class="form-select wide">
+                                            <option value="chatterbox-turbo">Chatterbox Turbo (Fast)</option>
+                                            <option value="chatterbox">Chatterbox Original</option>
+                                        </select>
+                                    </div>
+                                    <div id="model-status" class="model-status">
+                                        <span id="model-status-indicator" class="status-dot neutral"></span>
+                                        <span id="model-status-text" class="model-status__text">Checking model...</span>
+                                    </div>
+                                    <button id="apply-model-btn" type="button" class="btn secondary wide hidden">
+                                        <svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                            viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                        </svg>
+                                        Apply & Restart
+                                    </button>
+                                </div>
+                            </div>
 
-                            <div class="mb-5">
-                                <label for="text" class="label-base">Text to synthesize</label>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                            <div class="form-group">
+                                <label for="text" class="form-label">Text to synthesize</label>
+                                <p class="form-hint mb-2">
                                     Enter the text you want to convert to speech. For audiobooks, you can paste long
                                     chapters.
                                 </p>
-                                <div class="relative">
-                                    <textarea name="text" id="text" rows="8" class="textarea-base"
+                                <div class="textarea-wrapper">
+                                    <textarea name="text" id="text" rows="8" class="form-textarea"
                                         placeholder="Enter text here..." required></textarea>
-                                    <div class="absolute bottom-2.5 right-3 text-xs text-slate-500 dark:text-slate-400">
+                                    <div class="textarea-counter">
                                         <span id="char-count">0</span> Characters
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="flex flex-wrap items-center gap-x-6 gap-y-4 mb-6">
-                                <button type="button" id="generate-btn" class="btn-primary">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-1.5 inline-block">
+                            <!-- Paralinguistic Tags Section (Turbo only) -->
+                            <div id="paralinguistic-tags-section" class="form-group hidden">
+                                <div class="flex-row flex-wrap items-center gap-2">
+                                    <span class="form-label mr-2">Insert Tag:</span>
+                                    <button type="button" class="tag-btn" data-tag="[laugh]"
+                                        title="Insert [laugh] tag">😄 laugh</button>
+                                    <button type="button" class="tag-btn" data-tag="[chuckle]"
+                                        title="Insert [chuckle] tag">😊 chuckle</button>
+                                    <button type="button" class="tag-btn" data-tag="[sigh]"
+                                        title="Insert [sigh] tag">😮‍💨 sigh</button>
+                                    <button type="button" class="tag-btn" data-tag="[gasp]" title="Insert [gasp] tag">😲
+                                        gasp</button>
+                                    <button type="button" class="tag-btn" data-tag="[cough]"
+                                        title="Insert [cough] tag">🤧 cough</button>
+                                    <button type="button" class="tag-btn" data-tag="[clear throat]"
+                                        title="Insert [clear throat] tag">🗣️ clear throat</button>
+                                    <button type="button" class="tag-btn" data-tag="[sniff]"
+                                        title="Insert [sniff] tag">👃 sniff</button>
+                                    <button type="button" class="tag-btn" data-tag="[groan]"
+                                        title="Insert [groan] tag">😩 groan</button>
+                                    <button type="button" class="tag-btn" data-tag="[shush]"
+                                        title="Insert [shush] tag">🤫 shush</button>
+                                </div>
+                                <p class="form-hint mt-2">Click a tag to insert it at your cursor position. Tags produce
+                                    natural vocal reactions in the generated audio.</p>
+                            </div>
+
+                            <div class="flex-row flex-wrap items-center gap-4 mb-6">
+                                <button type="button" id="generate-btn" class="btn primary">
+                                    <svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                        viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round"
                                             d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
                                     </svg>
                                     Generate Speech
                                 </button>
-                                <label for="split-text-toggle"
-                                    class="flex items-center cursor-pointer text-sm label-base select-none">
+                                <label for="split-text-toggle" class="checkbox-label">
                                     <input type="checkbox" id="split-text-toggle" name="split_text"
-                                        class="mr-2 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:focus:ring-offset-slate-800 dark:checked:bg-indigo-500 dark:checked:border-indigo-500">
-                                    Split text into chunks
+                                        class="form-checkbox">
+                                    <span>Split text into chunks</span>
                                 </label>
-                                <div id="chunk-size-controls" class="flex items-center space-x-2 hidden">
-                                    <label for="chunk-size-slider" class="text-sm label-base whitespace-nowrap">Chunk
-                                        Size:</label>
+                                <div id="chunk-size-controls" class="flex-row items-center gap-2 hidden">
+                                    <label for="chunk-size-slider" class="form-label small">Chunk Size:</label>
                                     <input type="range" id="chunk-size-slider" name="chunk_size" min="50" max="1000"
-                                        step="10" value="120" class="slider-base w-32">
-                                    <span id="chunk-size-value"
-                                        class="text-sm font-medium text-slate-700 dark:text-slate-300 w-10 text-right tabular-nums">120</span>
+                                        step="10" value="120" class="form-slider short">
+                                    <span id="chunk-size-value" class="slider-value tabular-nums">120</span>
                                 </div>
                             </div>
-                            <p id="chunk-explanation" class="text-xs text-slate-500 dark:text-slate-400 mb-6 hidden">
-                                Splitting is essential for longer texts like articles or audiobook chapters.
-                                Recommended chunk size: ~150-400 characters.
+                            <p id="chunk-explanation" class="form-hint mb-6 hidden">
+                                Splitting is essential for longer texts like articles or audiobook chapters. Recommended
+                                chunk size: ~150-400 characters.
                             </p>
 
-                            <div class="mb-6">
-                                <label class="label-base mb-2">Voice Mode:</label>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <label class="voice-mode-option" data-mode="predefined">
-                                        <input type="radio" name="voice_mode" value="predefined" class="hidden peer"
-                                            checked>
+                            <div class="form-group">
+                                <label class="form-label mb-2">Voice Mode:</label>
+                                <div class="voice-mode">
+                                    <label class="voice-mode__option selected" data-mode="predefined">
+                                        <input type="radio" name="voice_mode" value="predefined" class="hidden" checked>
                                         <span>Predefined Voices</span>
                                     </label>
-                                    <label class="voice-mode-option" data-mode="clone">
-                                        <input type="radio" name="voice_mode" value="clone" class="hidden peer">
+                                    <label class="voice-mode__option" data-mode="clone">
+                                        <input type="radio" name="voice_mode" value="clone" class="hidden">
                                         <span>Voice Cloning (Reference)</span>
                                     </label>
                                 </div>
                             </div>
 
-                            <div id="predefined-voice-options" class="mb-6">
-                                <label for="predefined-voice-select" class="label-base">Select Predefined Voice:</label>
-                                <div class="flex items-center gap-2">
+                            <div id="predefined-voice-options" class="form-group">
+                                <label for="predefined-voice-select" class="form-label">Select Predefined Voice:</label>
+                                <div class="flex-row items-center gap-2">
                                     <select id="predefined-voice-select" name="predefined_voice_select"
-                                        class="select-base flex-grow">
+                                        class="form-select" style="flex-grow: 1;">
                                         <option value="none">-- Select Voice --</option>
                                     </select>
                                     <input type="file" id="predefined-voice-file-input" class="hidden" multiple
                                         accept=".wav,.mp3" aria-label="Upload predefined voice file">
-                                    <button type="button" id="predefined-voice-import-button" class="btn-import"
+                                    <button type="button" id="predefined-voice-import-button" class="btn-icon-stack"
                                         title="Import new predefined voice files">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <svg class="btn-icon-stack__icon" xmlns="http://www.w3.org/2000/svg"
+                                            viewBox="0 0 20 20" fill="currentColor">
                                             <path
                                                 d="M9.25 13.25a.75.75 0 0 0 1.5 0V4.636l2.955 3.129a.75.75 0 0 0 1.09-1.03l-4.25-4.5a.75.75 0 0 0-1.09 0l-4.25 4.5a.75.75 0 1 0 1.09 1.03L9.25 4.636v8.614Z" />
                                             <path
@@ -139,35 +184,35 @@
                                         </svg>
                                         Import
                                     </button>
-                                    <button type="button" id="predefined-voice-refresh-button" class="btn-refresh"
+                                    <button type="button" id="predefined-voice-refresh-button" class="btn-icon-stack"
                                         title="Refresh predefined voice list">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd"
-                                                d="M15.312 11.424a5.5 5.5 0 0 1-9.201-4.42 5.5 5.5 0 0 1 10.89 2.01a.75.75 0 0 1-1.49.174a4 4 0 0 0-7.486-2.641a4 4 0 0 0 6.688 2.947a.75.75 0 0 1 .999.057l-.004-.005ZM4.688 8.576a5.5 5.5 0 0 1 9.201 4.42a5.5 5.5 0 0 1-10.89-2.01a.75.75 0 0 1 1.49-.174a4 4 0 0 0 7.486 2.641a4 4 0 0 0-6.688-2.947a.75.75 0 0 1-.999-.057l.004.005Z"
-                                                clip-rule="evenodd" />
+                                        <svg class="btn-icon-stack__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                            viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                                         </svg>
                                         Refresh
                                     </button>
                                 </div>
                             </div>
 
-                            <div id="clone-options" class="mb-6 hidden">
-                                <label for="clone-reference-select" class="label-base">Reference Audio File</label>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                                    Select an uploaded <code class="code-inline">.wav</code> or <code
-                                        class="code-inline">.mp3</code> file.
-                                    For best results, use clean audio recordings.
+                            <div id="clone-options" class="form-group hidden">
+                                <label for="clone-reference-select" class="form-label">Reference Audio File</label>
+                                <p class="form-hint mb-2">
+                                    Select an uploaded <code class="code">.wav</code> or <code class="code">.mp3</code>
+                                    file. For best results, use clean audio recordings.
                                 </p>
-                                <div class="flex items-center gap-2">
+                                <div class="flex-row items-center gap-2">
                                     <select id="clone-reference-select" name="clone_reference_select"
-                                        class="select-base flex-grow">
+                                        class="form-select" style="flex-grow: 1;">
                                         <option value="none">-- Select Reference File --</option>
                                     </select>
                                     <input type="file" id="clone-file-input" class="hidden" multiple accept=".wav,.mp3"
                                         aria-label="Upload reference audio file">
-                                    <button type="button" id="clone-import-button" class="btn-import"
+                                    <button type="button" id="clone-import-button" class="btn-icon-stack"
                                         title="Import new reference files">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <svg class="btn-icon-stack__icon" xmlns="http://www.w3.org/2000/svg"
+                                            viewBox="0 0 20 20" fill="currentColor">
                                             <path
                                                 d="M9.25 13.25a.75.75 0 0 0 1.5 0V4.636l2.955 3.129a.75.75 0 0 0 1.09-1.03l-4.25-4.5a.75.75 0 0 0-1.09 0l-4.25 4.5a.75.75 0 1 0 1.09 1.03L9.25 4.636v8.614Z" />
                                             <path
@@ -175,203 +220,197 @@
                                         </svg>
                                         Import
                                     </button>
-                                    <button type="button" id="clone-refresh-button" class="btn-refresh"
+                                    <button type="button" id="clone-refresh-button" class="btn-icon-stack"
                                         title="Refresh reference file list">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd"
-                                                d="M15.312 11.424a5.5 5.5 0 0 1-9.201-4.42 5.5 5.5 0 0 1 10.89 2.01a.75.75 0 0 1-1.49.174a4 4 0 0 0-7.486-2.641a4 4 0 0 0 6.688 2.947a.75.75 0 0 1 .999.057l-.004-.005ZM4.688 8.576a5.5 5.5 0 0 1 9.201 4.42a5.5 5.5 0 0 1-10.89-2.01a.75.75 0 0 1 1.49-.174a4 4 0 0 0 7.486 2.641a4 4 0 0 0-6.688-2.947a.75.75 0 0 1-.999-.057l.004.005Z"
-                                                clip-rule="evenodd" />
+                                        <svg class="btn-icon-stack__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                            viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                                         </svg>
                                         Refresh
                                     </button>
                                 </div>
                             </div>
 
-                            <div class="mb-6">
-                                <label class="label-base mb-2">Load Example Preset:</label>
-                                <div id="presets-container" class="flex flex-wrap gap-2">
-                                    <p id="presets-placeholder" class="text-sm text-slate-500 dark:text-slate-400">
-                                        Loading presets...</p>
+                            <div class="form-group">
+                                <label class="form-label mb-2">Load Example Preset:</label>
+                                <div id="presets-container" class="flex-row flex-wrap gap-2">
+                                    <p id="presets-placeholder" class="form-hint">Loading presets...</p>
                                 </div>
                             </div>
 
-                            <div class="mb-6">
-                                <details class="group" open>
-                                    <summary class="list-none flex cursor-pointer items-center group">
-                                        <span
-                                            class="text-sm font-medium label-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Generation
-                                            Parameters</span>
-                                        <span
-                                            class="ml-1.5 text-slate-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors">
-                                            <svg class="group-open:rotate-180 h-5 w-5 transition-transform duration-200 ease-in-out"
-                                                viewBox="0 0 20 20" fill="currentColor">
-                                                <path fill-rule="evenodd"
-                                                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                    clip-rule="evenodd" />
-                                            </svg>
-                                        </span>
-                                    </summary>
-                                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                                        <div>
-                                            <label for="temperature" class="label-base">Temperature (<span
-                                                    id="temperature-value"
-                                                    class="font-semibold tabular-nums">0.8</span>)</label>
+                            <details class="collapsible" open>
+                                <summary class="collapsible__trigger">
+                                    <span>Generation Parameters</span>
+                                    <svg class="collapsible__icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd"
+                                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                            clip-rule="evenodd" />
+                                    </svg>
+                                </summary>
+                                <div class="collapsible__content">
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="temperature" class="form-label">Temperature (<span
+                                                    id="temperature-value" class="tabular-nums">0.8</span>)</label>
                                             <input type="range" id="temperature" name="temperature" min="0.0" max="1.5"
-                                                step="0.01" value="0.8" class="slider-base">
+                                                step="0.01" value="0.8" class="form-slider">
                                         </div>
-                                        <div>
-                                            <label for="exaggeration" class="label-base">Exaggeration (<span
-                                                    id="exaggeration-value"
-                                                    class="font-semibold tabular-nums">0.5</span>)</label>
+                                        <div id="exaggeration-group" class="form-group">
+                                            <label for="exaggeration" class="form-label">Exaggeration (<span
+                                                    id="exaggeration-value" class="tabular-nums">0.5</span>)</label>
                                             <input type="range" id="exaggeration" name="exaggeration" min="0.0"
-                                                max="2.0" step="0.01" value="0.5" class="slider-base">
+                                                max="2.0" step="0.01" value="0.5" class="form-slider">
                                         </div>
-                                        <div>
-                                            <label for="cfg-weight" class="label-base">CFG Weight (<span
-                                                    id="cfg-weight-value"
-                                                    class="font-semibold tabular-nums">0.5</span>)</label>
+                                        <div id="cfg-weight-group" class="form-group">
+                                            <label for="cfg-weight" class="form-label">CFG Weight (<span
+                                                    id="cfg-weight-value" class="tabular-nums">0.5</span>)</label>
                                             <input type="range" id="cfg-weight" name="cfg_weight" min="0.0" max="2.0"
-                                                step="0.01" value="0.5" class="slider-base">
+                                                step="0.01" value="0.5" class="form-slider">
                                         </div>
-                                        <div>
-                                            <label for="speed-factor" class="label-base">
+                                        <div class="form-group">
+                                            <label for="speed-factor" class="form-label">
                                                 Speed Factor (<span id="speed-factor-value"
-                                                    class="font-semibold tabular-nums">1.0</span>)
-                                                <span id="speed-factor-warning"
-                                                    class="text-xs text-yellow-600 dark:text-yellow-400 ml-2 hidden"></span>
+                                                    class="tabular-nums">1.0</span>)
+                                                <span id="speed-factor-warning" class="form-hint hidden"></span>
                                             </label>
                                             <input type="range" id="speed-factor" name="speed_factor" min="0.25"
-                                                max="4.0" step="0.05" value="1.0" class="slider-base">
+                                                max="4.0" step="0.05" value="1.0" class="form-slider">
                                         </div>
-                                        <div>
-                                            <label for="seed" class="label-base">Generation Seed</label>
-                                            <div class="w-36">
-                                                <input type="number" id="seed" name="seed" value="0"
-                                                    placeholder="0 (or -1 for random)" class="input-base"
-                                                    title="Enter an integer seed for reproducible results, or -1 for random. 0 may also be random depending on engine.">
-                                            </div>
-                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-                                                Integer for reproducible results. Some engines use 0 or -1 for random.
-                                            </p>
+                                        <div class="form-group">
+                                            <label for="seed" class="form-label">Generation Seed</label>
+                                            <input type="number" id="seed" name="seed" value="0"
+                                                placeholder="0 (or -1 for random)" class="form-input narrow"
+                                                title="Enter an integer seed for reproducible results, or -1 for random.">
+                                            <p class="form-hint">Integer for reproducible results. Some engines use 0 or
+                                                -1 for random.</p>
                                         </div>
-                                        <div id="language-select-container">
-                                            <label for="language" class="label-base">Language</label>
-                                            <select id="language" name="language" class="select-base w-36">
+                                        <div id="language-select-container" class="form-group">
+                                            <label for="language" class="form-label">Language</label>
+                                            <select id="language" name="language" class="form-select narrow">
                                                 <option value="en">English</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label for="output-format" class="label-base">Output Format</label>
-                                            <select id="output-format" name="output_format" class="select-base w-36">
+                                        <div class="form-group">
+                                            <label for="output-format" class="form-label">Output Format</label>
+                                            <select id="output-format" name="output_format" class="form-select narrow">
                                                 <option value="wav">WAV</option>
                                                 <option value="mp3" selected>MP3</option>
                                                 <option value="opus">Opus</option>
                                             </select>
-                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-                                                MP3 is recommended for smaller file sizes (e.g., audiobooks).
-                                            </p>
+                                            <p class="form-hint">MP3 is recommended for smaller file sizes (e.g.,
+                                                audiobooks).</p>
                                         </div>
-                                        <div class="col-span-1 md:col-span-2 mt-4 flex items-center gap-4">
-                                            <button id="save-gen-defaults-btn" type="button" class="btn-settings">Save
+                                        <div class="form-grid__full mt-4 flex-row items-center gap-4">
+                                            <button id="save-gen-defaults-btn" type="button" class="btn ghost">Save
                                                 Generation Parameters</button>
-                                            <span id="gen-defaults-status" class="text-xs hidden"></span>
+                                            <span id="gen-defaults-status" class="form-hint hidden"></span>
                                         </div>
                                     </div>
-                                </details>
-                            </div>
+                                </div>
+                            </details>
 
-                            <div class="mb-6">
-                                <details class="group" open> <!-- Server Config expanded by default -->
-                                    <summary class="list-none flex cursor-pointer items-center group">
-                                        <span
-                                            class="text-sm font-medium label-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Server
-                                            Configuration</span>
-                                        <span
-                                            class="ml-1.5 text-slate-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors">
-                                            <svg class="group-open:rotate-180 h-5 w-5 transition-transform duration-200 ease-in-out"
-                                                viewBox="0 0 20 20" fill="currentColor">
-                                                <path fill-rule="evenodd"
-                                                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                    clip-rule="evenodd" />
-                                            </svg>
-                                        </span>
-                                    </summary>
-                                    <div id="server-config-form"
-                                        class="mt-4 border-t border-slate-200 dark:border-slate-700 pt-5">
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                                            These settings are loaded from <code class="code-inline">config.yaml</code>
-                                            via an API call.
-                                            <strong class="font-medium">Restart the server</strong> to apply changes to
-                                            Host, Port, Model, or Path settings if modified here or directly in the
-                                            file.
+                            <details class="collapsible" open>
+                                <summary class="collapsible__trigger">
+                                    <span>Server Configuration</span>
+                                    <svg class="collapsible__icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd"
+                                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                            clip-rule="evenodd" />
+                                    </svg>
+                                </summary>
+                                <div class="collapsible__content">
+                                    <div id="server-config-form">
+                                        <p class="form-hint mb-4">
+                                            These settings are loaded from <code class="code">config.yaml</code> via an
+                                            API call.
+                                            <strong>Restart the server</strong> to apply changes to Host, Port, Model,
+                                            or Path settings if modified here or directly in the file.
                                         </p>
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                            <div><label for="config-server-host" class="label-base text-xs">Server
-                                                    Host</label><input type="text" id="config-server-host"
-                                                    name="server.host" class="input-base text-sm"></div>
-                                            <div><label for="config-server-port" class="label-base text-xs">Server
-                                                    Port</label><input type="number" id="config-server-port"
-                                                    name="server.port" class="input-base text-sm"></div>
-                                            <div><label for="config-tts-engine-device" class="label-base text-xs">TTS
-                                                    Device</label><input type="text" id="config-tts-engine-device"
-                                                    name="tts_engine.device" class="input-base text-sm"></div>
-                                            <div><label for="config-tts-engine-default_voice_id"
-                                                    class="label-base text-xs">Default Voice ID</label><input
-                                                    type="text" id="config-tts-engine-default_voice_id"
-                                                    name="tts_engine.default_voice_id" class="input-base text-sm"></div>
-                                            <div><label for="config-paths-model_cache" class="label-base text-xs">Model
-                                                    Cache Path</label><input type="text" id="config-paths-model_cache"
-                                                    name="paths.model_cache" class="input-base text-sm"></div>
-                                            <div><label for="config-tts-engine-predefined_voices_path"
-                                                    class="label-base text-xs">Predefined Voices Path</label><input
-                                                    type="text" id="config-tts-engine-predefined_voices_path"
-                                                    name="tts_engine.predefined_voices_path" class="input-base text-sm">
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label for="config-server-host" class="form-label small">Server
+                                                    Host</label>
+                                                <input type="text" id="config-server-host" name="server.host"
+                                                    class="form-input small">
                                             </div>
-                                            <div><label for="config-tts-engine-reference_audio_path"
-                                                    class="label-base text-xs">Reference Audio Path</label><input
-                                                    type="text" id="config-tts-engine-reference_audio_path"
-                                                    name="tts_engine.reference_audio_path" class="input-base text-sm">
+                                            <div class="form-group">
+                                                <label for="config-server-port" class="form-label small">Server
+                                                    Port</label>
+                                                <input type="number" id="config-server-port" name="server.port"
+                                                    class="form-input small">
                                             </div>
-                                            <div><label for="config-paths-output" class="label-base text-xs">Output
-                                                    Path</label><input type="text" id="config-paths-output"
-                                                    name="paths.output" class="input-base text-sm"></div>
-                                            <div><label for="config-audio_output-format"
-                                                    class="label-base text-xs">Audio Output Format</label><input
-                                                    type="text" id="config-audio_output-format"
-                                                    name="audio_output.format" class="input-base text-sm"></div>
-                                            <div><label for="config-audio_output-sample_rate"
-                                                    class="label-base text-xs">Audio Sample Rate</label><input
-                                                    type="number" id="config-audio_output-sample_rate"
-                                                    name="audio_output.sample_rate" class="input-base text-sm"></div>
-
-                                            <div
-                                                class="col-span-1 md:col-span-2 mt-4 flex flex-col md:flex-row gap-4 items-center">
-                                                <button id="save-config-btn" type="button" class="btn-settings">Save
-                                                    Server Configuration</button>
-                                                <button id="restart-server-btn" type="button"
-                                                    class="btn-danger w-full md:w-auto hidden">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                        viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
-                                                        class="w-5 h-5 mr-1.5 inline-block">
+                                            <div class="form-group">
+                                                <label for="config-tts-engine-device" class="form-label small">TTS
+                                                    Device</label>
+                                                <input type="text" id="config-tts-engine-device"
+                                                    name="tts_engine.device" class="form-input small">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="config-tts-engine-default_voice_id"
+                                                    class="form-label small">Default Voice ID</label>
+                                                <input type="text" id="config-tts-engine-default_voice_id"
+                                                    name="tts_engine.default_voice_id" class="form-input small">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="config-paths-model_cache" class="form-label small">Model
+                                                    Cache Path</label>
+                                                <input type="text" id="config-paths-model_cache"
+                                                    name="paths.model_cache" class="form-input small">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="config-tts-engine-predefined_voices_path"
+                                                    class="form-label small">Predefined Voices Path</label>
+                                                <input type="text" id="config-tts-engine-predefined_voices_path"
+                                                    name="tts_engine.predefined_voices_path" class="form-input small">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="config-tts-engine-reference_audio_path"
+                                                    class="form-label small">Reference Audio Path</label>
+                                                <input type="text" id="config-tts-engine-reference_audio_path"
+                                                    name="tts_engine.reference_audio_path" class="form-input small">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="config-paths-output" class="form-label small">Output
+                                                    Path</label>
+                                                <input type="text" id="config-paths-output" name="paths.output"
+                                                    class="form-input small">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="config-audio_output-format" class="form-label small">Audio
+                                                    Output Format</label>
+                                                <input type="text" id="config-audio_output-format"
+                                                    name="audio_output.format" class="form-input small">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="config-audio_output-sample_rate"
+                                                    class="form-label small">Audio Sample Rate</label>
+                                                <input type="number" id="config-audio_output-sample_rate"
+                                                    name="audio_output.sample_rate" class="form-input small">
+                                            </div>
+                                            <div class="form-grid__full mt-4 flex-row flex-wrap items-center gap-4">
+                                                <button id="save-config-btn" type="button" class="btn ghost">Save Server
+                                                    Configuration</button>
+                                                <button id="restart-server-btn" type="button" class="btn danger hidden">
+                                                    <svg class="btn__icon" xmlns="http://www.w3.org/2000/svg"
+                                                        fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                                        stroke="currentColor">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
                                                             d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                                                     </svg>
                                                     Restart Server
                                                 </button>
-                                                <span id="config-status" class="text-xs ml-2 hidden"></span>
+                                                <span id="config-status" class="form-hint hidden"></span>
                                             </div>
                                         </div>
                                     </div>
-                                </details>
-                            </div>
+                                </div>
+                            </details>
                         </div>
 
-                        <div class="card-footer">
-                            <button id="reset-settings-btn" type="button" class="btn-settings">Reset All
-                                Settings</button>
-                            <div class="text-xs text-slate-500 dark:text-slate-400 ml-2">
-                                Resets settings to their defaults.
-                            </div>
+                        <div class="card__footer">
+                            <button id="reset-settings-btn" type="button" class="btn ghost">Reset All Settings</button>
+                            <span class="form-hint ml-2">Resets settings to their defaults.</span>
                         </div>
                     </form>
                 </div>
@@ -379,21 +418,27 @@
                 <div id="audio-player-container" class="mt-8"></div>
 
                 <div class="mt-10">
-                    <h2 class="card-header mb-4 text-base font-semibold">Tips & Tricks</h2>
-                    <div class="card-base">
-                        <div class="p-6 sm:p-8">
-                            <ul class="list-disc space-y-2.5 pl-5 text-sm text-slate-700 dark:text-slate-300">
-                                <li>For **Audiobooks**, use **MP3** format, enable **Split text**, and set a chunk size
-                                    of ~250-500.</li>
-                                <li>Use **Predefined Voices** for consistent, high-quality output. You can import new
-                                    ones.</li>
-                                <li>For **Voice Cloning**, upload clean reference audio (<code
-                                        class="code-inline">.wav</code>/<code class="code-inline">.mp3</code>). Quality
-                                    of reference is key.</li>
-                                <li>Experiment with **Temperature** and other generation parameters to fine-tune output.
+                    <h2 class="card__title mb-4">Tips & Tricks</h2>
+                    <div class="card">
+                        <div class="card__body">
+                            <ul class="tips-list">
+                                <li>For <strong>Audiobooks</strong>, use <strong>MP3</strong> format, enable
+                                    <strong>Split text</strong>, and set a chunk size of ~250-500.
                                 </li>
-                                <li>Adjusting **Speed Factor** away from 1.0 is experimental and may cause echo.</li>
-                                <li>Check the <code class="code-inline">/docs</code> endpoint for API details.</li>
+                                <li>Use <strong>Predefined Voices</strong> for consistent, high-quality output. You can
+                                    import new ones.</li>
+                                <li>For <strong>Voice Cloning</strong>, upload clean reference audio (<code
+                                        class="code">.wav</code>/<code class="code">.mp3</code>). Quality of reference
+                                    is key.</li>
+                                <li>Experiment with <strong>Temperature</strong> and other generation parameters to
+                                    fine-tune output.</li>
+                                <li>Adjusting <strong>Speed Factor</strong> away from 1.0 is experimental and may cause
+                                    echo.</li>
+                                <li>When using <strong>Turbo</strong> model, you can insert paralinguistic tags like
+                                    <code class="code">[laugh]</code> or <code class="code">[sigh]</code> for natural
+                                    vocal reactions.
+                                </li>
+                                <li>Check the <code class="code">/docs</code> endpoint for API details.</li>
                             </ul>
                         </div>
                     </div>
@@ -401,13 +446,13 @@
             </div>
         </main>
 
-        <footer class="bg-slate-100 dark:bg-slate-800 py-8 mt-16 border-t border-slate-200 dark:border-slate-700/80">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-center">
+        <footer class="footer">
+            <div class="container">
+                <div class="footer__content">
                     <a href="https://github.com/devnen/Chatterbox-TTS-Server" target="_blank" rel="noopener noreferrer"
-                        class="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor"
-                            viewBox="0 0 16 16" class="flex-shrink-0">
+                        class="footer__link">
+                        <svg class="footer__icon" xmlns="http://www.w3.org/2000/svg" fill="currentColor"
+                            viewBox="0 0 16 16">
                             <path
                                 d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
                         </svg>
@@ -418,69 +463,66 @@
         </footer>
     </div>
 
-    <div id="loading-overlay" class="loading-overlay-base hidden opacity-0" data-state="closed" style="display: none;">
-        <div class="loading-box-base">
-            <svg class="loading-spinner animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none"
-                viewBox="0 0 24 24">
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading hidden opacity-0" data-state="closed" style="display: none;">
+        <div class="loading__box">
+            <svg class="loading__spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor"
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
                 </path>
             </svg>
-            <p id="loading-message" class="loading-text">Generating audio...</p>
-            <p id="loading-status" class="loading-status">Please wait.</p>
-            <button id="loading-cancel-btn" type="button" class="btn-secondary mt-1"
-                title="Cancel UI request. Backend may continue briefly.">Cancel</button>
+            <p id="loading-message" class="loading__title">Generating audio...</p>
+            <p id="loading-status" class="loading__status">Please wait.</p>
+            <button id="loading-cancel-btn" type="button" class="btn secondary"
+                title="Cancel UI request.">Cancel</button>
         </div>
     </div>
 
-    <div id="chunk-warning-modal" class="modal-overlay hidden opacity-0" data-state="closed" style="display: none;">
-        <div class="modal-box">
-            <h3 class="modal-title">Chunking Voice Consistency Warning</h3>
-            <div class="modal-content">
+    <!-- Chunk Warning Modal -->
+    <div id="chunk-warning-modal" class="modal hidden opacity-0" data-state="closed" style="display: none;">
+        <div class="modal__box">
+            <h3 class="modal__title">Chunking Voice Consistency Warning</h3>
+            <div class="modal__content">
                 <p>You are generating with text splitting enabled and not using Predefined Voices or Voice Cloning with
                     a fixed seed.</p>
-                <p class="mt-2">This combination may result in <strong class="font-semibold">different voices for
-                        different text chunks</strong>, leading to inconsistent audio.</p>
-                <p class="mt-2">For consistent voices across chunks, please use:</p>
-                <ul class="list-disc pl-5 mt-1 space-y-1">
+                <p>This combination may result in <strong>different voices for different text chunks</strong>, leading
+                    to inconsistent audio.</p>
+                <p>For consistent voices across chunks, please use:</p>
+                <ul>
                     <li>"Predefined Voices" mode.</li>
                     <li>"Voice Cloning" mode.</li>
                     <li>A specific integer in "Generation Seed" (not random).</li>
                 </ul>
             </div>
-            <div class="mt-4 mb-5 flex items-center">
-                <input type="checkbox" id="hide-chunk-warning-checkbox"
-                    class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:focus:ring-offset-slate-800 dark:checked:bg-indigo-500 dark:checked:border-indigo-500">
-                <label for="hide-chunk-warning-checkbox"
-                    class="ml-2 block text-sm text-slate-700 dark:text-slate-300 cursor-pointer">Do not show this
-                    warning again</label>
+            <div class="modal__checkbox-row">
+                <input type="checkbox" id="hide-chunk-warning-checkbox" class="form-checkbox">
+                <label for="hide-chunk-warning-checkbox" class="modal__checkbox-label">Do not show this warning
+                    again</label>
             </div>
-            <div class="modal-actions">
-                <button id="chunk-warning-cancel" type="button" class="btn-secondary">Cancel Generation</button>
-                <button id="chunk-warning-ok" type="button" class="btn-primary">Proceed Anyway</button>
+            <div class="modal__actions">
+                <button id="chunk-warning-cancel" type="button" class="btn secondary">Cancel Generation</button>
+                <button id="chunk-warning-ok" type="button" class="btn primary">Proceed Anyway</button>
             </div>
         </div>
     </div>
 
-    <div id="generation-warning-modal" class="modal-overlay hidden opacity-0" data-state="closed"
-        style="display: none;">
-        <div class="modal-box">
-            <h3 class="modal-title">Generation Quality Notice</h3>
-            <div class="modal-content">
+    <!-- Generation Warning Modal -->
+    <div id="generation-warning-modal" class="modal hidden opacity-0" data-state="closed" style="display: none;">
+        <div class="modal__box">
+            <h3 class="modal__title">Generation Quality Notice</h3>
+            <div class="modal__content">
                 <p>Please be aware that text-to-speech models may sometimes produce unexpected results or artifacts.</p>
-                <p class="mt-2">This can include variations in voice consistency, delivery, or minor audio
-                    imperfections. Experiment with parameters for best results.</p>
+                <p>This can include variations in voice consistency, delivery, or minor audio imperfections. Experiment
+                    with parameters for best results.</p>
             </div>
-            <div class="mt-4 mb-5 flex items-center">
-                <input type="checkbox" id="hide-generation-warning-checkbox"
-                    class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:focus:ring-offset-slate-800 dark:checked:bg-indigo-500 dark:checked:border-indigo-500">
-                <label for="hide-generation-warning-checkbox"
-                    class="ml-2 block text-sm text-slate-700 dark:text-slate-300 cursor-pointer">Do not show this
-                    warning again</label>
+            <div class="modal__checkbox-row">
+                <input type="checkbox" id="hide-generation-warning-checkbox" class="form-checkbox">
+                <label for="hide-generation-warning-checkbox" class="modal__checkbox-label">Do not show this warning
+                    again</label>
             </div>
-            <div class="modal-actions">
-                <button id="generation-warning-acknowledge" type="button" class="btn-primary">Acknowledge &
+            <div class="modal__actions">
+                <button id="generation-warning-acknowledge" type="button" class="btn primary">Acknowledge &
                     Generate</button>
             </div>
         </div>
