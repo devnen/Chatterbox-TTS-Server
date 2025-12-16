@@ -10,12 +10,18 @@ document.addEventListener('DOMContentLoaded', async function () {
     let wavesurfer = null;
     let currentAudioBlobUrl = null;
     let saveStateTimeout = null;
+    let currentPresetName = null;
 
     let currentConfig = {};
     let currentUiState = {};
     let appPresets = [];
     let initialReferenceFiles = [];
     let initialPredefinedVoices = [];
+
+    // Model information state
+    let currentModelInfo = null;
+    let selectedModelSelector = 'chatterbox-turbo';
+    let modelChangesPending = false;
 
     let hideChunkWarning = false;
     let hideGenerationWarning = false;
@@ -89,9 +95,21 @@ document.addEventListener('DOMContentLoaded', async function () {
     const generationWarningAcknowledgeBtn = document.getElementById('generation-warning-acknowledge');
     const hideGenerationWarningCheckbox = document.getElementById('hide-generation-warning-checkbox');
 
+    // Model-related elements
+    const modelIndicator = document.getElementById('model-indicator');
+    const modelBadge = document.getElementById('model-badge');
+    const modelBadgeIcon = document.getElementById('model-badge-icon');
+    const modelBadgeText = document.getElementById('model-badge-text');
+    const modelSelect = document.getElementById('model-select');
+    const modelStatusIndicator = document.getElementById('model-status-indicator');
+    const modelStatusText = document.getElementById('model-status-text');
+    const applyModelBtn = document.getElementById('apply-model-btn');
+    const paralinguisticTagsSection = document.getElementById('paralinguistic-tags-section');
+    const tagButtons = document.querySelectorAll('.tag-btn');
+
 
     // Handle voice mode selection visual feedback
-    const voiceModeOptions = document.querySelectorAll('.voice-mode-option');
+    const voiceModeOptions = document.querySelectorAll('.voice-mode__option');
 
     voiceModeRadios.forEach(radio => {
         radio.addEventListener('change', function () {
@@ -101,7 +119,8 @@ document.addEventListener('DOMContentLoaded', async function () {
             });
 
             // Add selected class to the parent of the checked radio
-            const selectedOption = this.closest('.voice-mode-option');
+            // CORRECTED: Selector updated to match HTML
+            const selectedOption = this.closest('.voice-mode__option');
             if (selectedOption) {
                 selectedOption.classList.add('selected');
             }
@@ -111,7 +130,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Set initial state
     const checkedRadio = document.querySelector('input[name="voice_mode"]:checked');
     if (checkedRadio) {
-        const selectedOption = checkedRadio.closest('.voice-mode-option');
+        // CORRECTED: Selector updated to match HTML
+        const selectedOption = checkedRadio.closest('.voice-mode__option');
         if (selectedOption) {
             selectedOption.classList.add('selected');
         }
@@ -120,26 +140,34 @@ document.addEventListener('DOMContentLoaded', async function () {
     // --- Utility Functions ---
     function showNotification(message, type = 'info', duration = 5000) {
         if (!notificationArea) return null;
+
         const icons = {
-            success: '<svg class="notification-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>',
-            error: '<svg class="notification-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>',
-            warning: '<svg class="notification-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>',
-            info: '<svg class="notification-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" /></svg>'
+            success: '<svg class="notification__icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>',
+            error: '<svg class="notification__icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>',
+            warning: '<svg class="notification__icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>',
+            info: '<svg class="notification__icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" /></svg>'
         };
-        const typeClassMap = { success: 'notification-success', error: 'notification-error', warning: 'notification-warning', info: 'notification-info' };
+
         const notificationDiv = document.createElement('div');
-        notificationDiv.className = `notification-base ${typeClassMap[type] || 'notification-info'}`;
+        notificationDiv.className = `notification ${type}`;
         notificationDiv.setAttribute('role', 'alert');
-        // Create content wrapper
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'flex items-start flex-grow';
-        contentWrapper.innerHTML = `${icons[type] || icons['info']} <span class="block sm:inline">${message}</span>`;
+
+        // Build notification structure
+        notificationDiv.innerHTML = `
+            ${icons[type] || icons['info']}
+            <div class="notification__content"><span>${message}</span></div>
+        `;
 
         // Create close button
         const closeButton = document.createElement('button');
         closeButton.type = 'button';
-        closeButton.className = 'ml-auto -mx-1.5 -my-1.5 bg-transparent rounded-lg p-1.5 inline-flex h-8 w-8 items-center justify-center text-current hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 flex-shrink-0';
-        closeButton.innerHTML = '<span class="sr-only">Close</span><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>';
+        closeButton.className = 'notification__close';
+        closeButton.innerHTML = `
+            <span class="sr-only">Close</span>
+            <svg class="notification__close-icon" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+            </svg>
+        `;
         closeButton.onclick = () => {
             notificationDiv.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
             notificationDiv.style.opacity = '0';
@@ -147,11 +175,13 @@ document.addEventListener('DOMContentLoaded', async function () {
             setTimeout(() => notificationDiv.remove(), 300);
         };
 
-        // Add both to notification
-        notificationDiv.appendChild(contentWrapper);
         notificationDiv.appendChild(closeButton);
         notificationArea.appendChild(notificationDiv);
-        if (duration > 0) setTimeout(() => closeButton.click(), duration);
+
+        if (duration > 0) {
+            setTimeout(() => closeButton.click(), duration);
+        }
+
         return notificationDiv;
     }
 
@@ -165,11 +195,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     function applyTheme(theme) {
         const isDark = theme === 'dark';
         document.documentElement.classList.toggle('dark', isDark);
-        if (themeSwitchThumb) {
-            themeSwitchThumb.classList.toggle('translate-x-6', isDark);
-            themeSwitchThumb.classList.toggle('bg-indigo-500', isDark);
-            themeSwitchThumb.classList.toggle('bg-white', !isDark);
-        }
+
+        // WaveSurfer color update
         if (wavesurfer) {
             wavesurfer.setOptions({
                 waveColor: isDark ? '#6366f1' : '#a5b4fc',
@@ -177,6 +204,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 cursorColor: isDark ? '#cbd5e1' : '#475569',
             });
         }
+
         localStorage.setItem('uiTheme', theme);
     }
 
@@ -200,8 +228,10 @@ document.addEventListener('DOMContentLoaded', async function () {
             last_split_text_enabled: splitTextToggle ? splitTextToggle.checked : true,
             hide_chunk_warning: hideChunkWarning,
             hide_generation_warning: hideGenerationWarning,
-            theme: localStorage.getItem('uiTheme') || 'dark'
+            theme: localStorage.getItem('uiTheme') || 'dark',
+            last_preset_name: currentPresetName,
         };
+
         try {
             const response = await fetch(`${API_BASE_URL}/save_settings`, {
                 method: 'POST',
@@ -220,7 +250,6 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     function debouncedSaveState() {
         // Do not save anything until the entire UI has finished its initial setup.
-        // MODIFICATION: Add a check for listenersAttached.
         if (!uiReady || !listenersAttached) { return; }
         clearTimeout(saveStateTimeout);
         saveStateTimeout = setTimeout(saveCurrentUiState, DEBOUNCE_DELAY_MS);
@@ -235,6 +264,221 @@ document.addEventListener('DOMContentLoaded', async function () {
                 speedFactorWarningSpan.classList.remove('hidden');
             } else {
                 speedFactorWarningSpan.classList.add('hidden');
+            }
+        }
+    }
+
+    // --- Model Management Functions (New Features) ---
+
+    function updateModelUI(modelInfo) {
+        if (!modelInfo) {
+            console.warn('updateModelUI called with null modelInfo');
+            return;
+        }
+
+        currentModelInfo = modelInfo;
+
+        // Update model indicator badge
+        if (modelIndicator && modelBadge) {
+            modelIndicator.classList.remove('hidden');
+
+            // Use simplified modifier classes
+            modelBadge.className = modelInfo.type === 'turbo'
+                ? 'model-badge turbo'
+                : 'model-badge original';
+            modelBadgeText.textContent = modelInfo.type === 'turbo' ? '⚡ Turbo' : 'Original';
+        }
+
+        // Update model status indicator
+        if (modelStatusIndicator && modelStatusText) {
+            if (modelInfo.loaded) {
+                modelStatusIndicator.className = 'status-dot success';
+                modelStatusText.textContent = `${modelInfo.class_name} loaded on ${modelInfo.device}`;
+                modelStatusText.className = 'model-status__text success';
+            } else {
+                modelStatusIndicator.className = 'status-dot error';
+                modelStatusText.textContent = 'Model not loaded';
+                modelStatusText.className = 'model-status__text error';
+            }
+        }
+
+        // Update model selector dropdown to match loaded model
+        if (modelSelect && !modelChangesPending) {
+            const selectorValue = modelInfo.type === 'turbo' ? 'chatterbox-turbo' : 'chatterbox';
+            modelSelect.value = selectorValue;
+            selectedModelSelector = selectorValue;
+        }
+
+        // Show/hide model-specific UI sections
+        const exaggerationGroup = document.getElementById('exaggeration-group');
+        const cfgWeightGroup = document.getElementById('cfg-weight-group');
+
+        // Show/hide paralinguistic tags section (Turbo only)
+        if (paralinguisticTagsSection) {
+            if (modelInfo.type === 'turbo' && modelInfo.supports_paralinguistic_tags) {
+                paralinguisticTagsSection.classList.remove('hidden');
+            } else {
+                paralinguisticTagsSection.classList.add('hidden');
+            }
+        }
+
+        // Hide exaggeration and CFG for turbo model
+        if (modelInfo.type === 'turbo') {
+            exaggerationGroup?.classList.add('hidden');
+            cfgWeightGroup?.classList.add('hidden');
+        } else {
+            exaggerationGroup?.classList.remove('hidden');
+            cfgWeightGroup?.classList.remove('hidden');
+        }
+
+        // Refresh presets to filter based on current model type
+        populatePresets();
+
+        console.log('Model UI updated:', modelInfo);
+    }
+
+    function insertTagAtCursor(tag) {
+        if (!textArea) return;
+
+        const startPos = textArea.selectionStart;
+        const endPos = textArea.selectionEnd;
+        const textBefore = textArea.value.substring(0, startPos);
+        const textAfter = textArea.value.substring(endPos);
+
+        // Insert tag with a space after if not at end and next char isn't a space
+        let insertText = tag;
+        if (textAfter.length > 0 && textAfter[0] !== ' ') {
+            insertText = tag + ' ';
+        }
+
+        textArea.value = textBefore + insertText + textAfter;
+
+        // Update cursor position to after the inserted tag
+        const newCursorPos = startPos + insertText.length;
+        textArea.setSelectionRange(newCursorPos, newCursorPos);
+        textArea.focus();
+
+        // Update character count
+        if (charCount) {
+            charCount.textContent = textArea.value.length;
+        }
+
+        // Trigger state save
+        debouncedSaveState();
+    }
+
+    function handleModelSelectChange() {
+        if (!modelSelect) return;
+
+        const newSelector = modelSelect.value;
+        const currentSelector = currentModelInfo?.type === 'turbo' ? 'chatterbox-turbo' : 'chatterbox';
+
+        if (newSelector !== currentSelector) {
+            modelChangesPending = true;
+
+            // Show the apply button
+            if (applyModelBtn) {
+                applyModelBtn.classList.remove('hidden');
+            }
+
+            // Update status indicator and text to show pending state
+            if (modelStatusIndicator) {
+                modelStatusIndicator.className = 'status-dot warning';
+            }
+            if (modelStatusText) {
+                modelStatusText.textContent = 'Model change pending - click Apply & Restart';
+                modelStatusText.className = 'model-status__text warning';
+            }
+        } else {
+            modelChangesPending = false;
+
+            // Hide the apply button
+            if (applyModelBtn) {
+                applyModelBtn.classList.add('hidden');
+            }
+
+            // Restore status from current model info
+            updateModelUI(currentModelInfo);
+        }
+    }
+
+
+    async function applyModelChange() {
+        if (!modelSelect) return;
+
+        const newSelector = modelSelect.value;
+
+        // Update status
+        if (modelStatusText) {
+            modelStatusText.textContent = 'Saving configuration...';
+        }
+        if (applyModelBtn) {
+            applyModelBtn.disabled = true;
+            applyModelBtn.innerHTML = `
+                <svg class="btn__icon animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+            `;
+        }
+
+        try {
+            // Save the model selector to config
+            const response = await fetch(`${API_BASE_URL}/save_settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: {
+                        repo_id: newSelector
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorResult = await response.json().catch(() => ({ detail: 'Failed to save' }));
+                throw new Error(errorResult.detail || 'Failed to save model configuration');
+            }
+
+            showNotification('Model configuration saved. Initiating server restart...', 'info');
+
+            // Trigger server restart
+            const restartResponse = await fetch(`${API_BASE_URL}/restart_server`, {
+                method: 'POST'
+            });
+
+            if (restartResponse.ok) {
+                showNotification(
+                    'Server restart initiated. The page will reload automatically in a few seconds...',
+                    'success',
+                    10000
+                );
+
+                // Attempt to reload after delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 5000);
+            } else {
+                showNotification(
+                    'Configuration saved. Please restart the server manually for changes to take effect.',
+                    'warning',
+                    0
+                );
+            }
+
+        } catch (error) {
+            console.error('Error applying model change:', error);
+            showNotification(`Error: ${error.message}`, 'error');
+
+            // Re-enable button
+            if (applyModelBtn) {
+                applyModelBtn.disabled = false;
+                applyModelBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                    Apply & Restart
+                `;
             }
         }
     }
@@ -257,7 +501,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             languageSelectContainer.classList.add('hidden');
         }
         updateSpeedFactorWarning(); // Initial check for speed factor warning
-        // attachStateSavingListeners();
         const initialGenResult = currentConfig.initial_gen_result;
         if (initialGenResult && initialGenResult.outputUrl) {
             initializeWaveSurfer(initialGenResult.outputUrl, initialGenResult);
@@ -281,7 +524,11 @@ document.addEventListener('DOMContentLoaded', async function () {
             hideGenerationWarning = currentUiState.hide_generation_warning || false;
             currentVoiceMode = currentUiState.last_voice_mode || 'predefined';
 
-            // This now ONLY sets values. It does NOT attach state-saving listeners.
+            // NEW: Handle model info from initial data
+            if (data.model_info) {
+                updateModelUI(data.model_info);
+            }
+
             initializeApplication();
 
         } catch (error) {
@@ -309,19 +556,34 @@ document.addEventListener('DOMContentLoaded', async function () {
             textArea.value = currentUiState.last_text;
             if (charCount) charCount.textContent = textArea.value.length;
         }
+
+        // Handle Voice Mode Selection
         const modeRadioToSelect = document.querySelector(`input[name="voice_mode"][value="${currentVoiceMode}"]`);
-        if (modeRadioToSelect) modeRadioToSelect.checked = true;
-        else {
-            document.querySelector('input[name="voice_mode"][value="predefined"]').checked = true;
-            currentVoiceMode = 'predefined';
+
+        if (modeRadioToSelect) {
+            modeRadioToSelect.checked = true;
+            // FIX: Manually fire the change event so the .selected class updates visually
+            modeRadioToSelect.dispatchEvent(new Event('change'));
+        } else {
+            const defaultRadio = document.querySelector('input[name="voice_mode"][value="predefined"]');
+            if (defaultRadio) {
+                defaultRadio.checked = true;
+                currentVoiceMode = 'predefined';
+                defaultRadio.dispatchEvent(new Event('change'));
+            }
         }
+
         toggleVoiceOptionsDisplay();
+
         if (seedInput && currentUiState.last_seed !== undefined) seedInput.value = currentUiState.last_seed;
         else if (seedInput && currentConfig?.generation_defaults?.seed !== undefined) seedInput.value = currentConfig.generation_defaults.seed;
+
         if (splitTextToggle) splitTextToggle.checked = currentUiState.last_split_text_enabled !== undefined ? currentUiState.last_split_text_enabled : true;
+
         if (chunkSizeSlider && currentUiState.last_chunk_size !== undefined) chunkSizeSlider.value = currentUiState.last_chunk_size;
         if (chunkSizeValue) chunkSizeValue.textContent = chunkSizeSlider ? chunkSizeSlider.value : '120';
         toggleChunkControlsVisibility();
+
         const genDefaults = currentConfig.generation_defaults || {};
         if (temperatureSlider) temperatureSlider.value = genDefaults.temperature !== undefined ? genDefaults.temperature : 0.8;
         if (temperatureValueDisplay) temperatureValueDisplay.textContent = temperatureSlider.value;
@@ -333,11 +595,32 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (speedFactorValueDisplay) speedFactorValueDisplay.textContent = speedFactorSlider.value;
         if (languageSelect) languageSelect.value = genDefaults.language || 'en';
         if (outputFormatSelect) outputFormatSelect.value = currentConfig?.audio_output?.format || 'mp3';
+
         if (hideChunkWarningCheckbox) hideChunkWarningCheckbox.checked = hideChunkWarning;
         if (hideGenerationWarningCheckbox) hideGenerationWarningCheckbox.checked = hideGenerationWarning;
+
+        // --- PRESET RESTORATION LOGIC ---
+
+        // 1. Restore the name from state variable
+        if (currentUiState.last_preset_name) {
+            currentPresetName = currentUiState.last_preset_name;
+        }
+
+        // 2. Logic to apply preset (if empty) OR just highlight button (if text exists)
         if (textArea && !textArea.value && appPresets && appPresets.length > 0) {
-            const defaultPreset = appPresets.find(p => p.name === "Standard Narration") || appPresets[0];
-            if (defaultPreset) applyPreset(defaultPreset, false, false);
+            // Case A: No text entered. We want to load a preset fully.
+            // Priority: Saved preset > "Standard Narration" > First available
+            const savedPreset = appPresets.find(p => p.name === currentPresetName);
+            const defaultPreset = savedPreset || appPresets.find(p => p.name === "Standard Narration") || appPresets[0];
+
+            if (defaultPreset) {
+                // Apply values AND visuals, no notification, no save
+                applyPreset(defaultPreset, false, false);
+            }
+        } else if (currentPresetName) {
+            // Case B: Text already exists (restored from last_text). 
+            // We don't want to overwrite parameters, but we want to show which preset button was active.
+            updatePresetVisuals(currentPresetName);
         }
     }
 
@@ -369,6 +652,25 @@ document.addEventListener('DOMContentLoaded', async function () {
         });
         if (languageSelect) languageSelect.addEventListener('change', debouncedSaveState);
         if (outputFormatSelect) outputFormatSelect.addEventListener('change', debouncedSaveState);
+
+        // NEW: Model management listeners
+        if (modelSelect) {
+            modelSelect.addEventListener('change', handleModelSelectChange);
+        }
+
+        if (applyModelBtn) {
+            applyModelBtn.addEventListener('click', applyModelChange);
+        }
+
+        // NEW: Tag button listeners
+        tagButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const tag = e.currentTarget.getAttribute('data-tag');
+                if (tag) {
+                    insertTagAtCursor(tag);
+                }
+            });
+        });
     }
 
     // --- Dynamic UI Population ---
@@ -415,27 +717,62 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
+    function updatePresetVisuals(name) {
+        currentPresetName = name;
+
+        // Find all preset buttons
+        const buttons = document.querySelectorAll('.preset-btn');
+        buttons.forEach(btn => {
+            // We will add data-name to buttons in the next step
+            if (btn.dataset.name === name) {
+                btn.classList.add('selected');
+            } else {
+                btn.classList.remove('selected');
+            }
+        });
+    }
+
     function populatePresets() {
         if (!presetsContainer || !appPresets) return;
-        if (appPresets.length === 0) {
-            if (presetsPlaceholder) presetsPlaceholder.textContent = 'No presets available.';
+
+        // Filter presets based on current model
+        // Hide "Turbo" presets when Chatterbox-Original is loaded
+        let filteredPresets = appPresets;
+        if (currentModelInfo && currentModelInfo.type !== 'turbo') {
+            filteredPresets = appPresets.filter(preset =>
+                !preset.name.toLowerCase().startsWith('turbo')
+            );
+        }
+
+        // Clear container
+        presetsContainer.innerHTML = '';
+
+        if (filteredPresets.length === 0) {
+            const placeholder = document.createElement('p');
+            placeholder.className = 'form-hint';
+            placeholder.textContent = 'No presets available for this model.';
+            presetsContainer.appendChild(placeholder);
             return;
         }
-        if (presetsPlaceholder) presetsPlaceholder.remove();
-        presetsContainer.innerHTML = '';
-        appPresets.forEach((preset, index) => {
+
+        filteredPresets.forEach((preset, index) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.id = `preset-btn-${index}`;
-            button.className = 'preset-button';
-            button.title = `Load '${preset.name}' text and settings`;
+            button.className = 'preset-btn';
+            button.dataset.name = preset.name;
+            button.title = `Load '${preset.name}' preset`;
             button.textContent = preset.name;
             button.addEventListener('click', () => applyPreset(preset));
             presetsContainer.appendChild(button);
         });
+
+        if (currentPresetName) {
+            updatePresetVisuals(currentPresetName);
+        }
     }
 
-    function applyPreset(presetData, showNotif = true) {
+    function applyPreset(presetData, showNotif = true, isUserInteraction = true) {
         if (!presetData) return;
         if (textArea && presetData.text !== undefined) {
             textArea.value = presetData.text;
@@ -452,26 +789,37 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (exaggerationValueDisplay && exaggerationSlider) exaggerationValueDisplay.textContent = exaggerationSlider.value;
         if (cfgWeightValueDisplay && cfgWeightSlider) cfgWeightValueDisplay.textContent = cfgWeightSlider.value;
         if (speedFactorValueDisplay && speedFactorSlider) speedFactorValueDisplay.textContent = speedFactorSlider.value;
-        updateSpeedFactorWarning(); // Update warning after applying preset
+        updateSpeedFactorWarning();
+
         if (genParams.voice_id && predefinedVoiceSelect) {
             const voiceExists = Array.from(predefinedVoiceSelect.options).some(opt => opt.value === genParams.voice_id);
             if (voiceExists) {
                 predefinedVoiceSelect.value = genParams.voice_id;
-                // MODIFICATION: Set checked property directly and call the UI update function.
-                document.querySelector('input[name="voice_mode"][value="predefined"]').checked = true;
+                const predefinedRadio = document.querySelector('input[name="voice_mode"][value="predefined"]');
+                if (predefinedRadio) {
+                    predefinedRadio.checked = true;
+                    predefinedRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
                 toggleVoiceOptionsDisplay();
             }
         } else if (genParams.reference_audio_filename && cloneReferenceSelect) {
             const refExists = Array.from(cloneReferenceSelect.options).some(opt => opt.value === genParams.reference_audio_filename);
             if (refExists) {
                 cloneReferenceSelect.value = genParams.reference_audio_filename;
-                // MODIFICATION: Set checked property directly and call the UI update function.
-                document.querySelector('input[name="voice_mode"][value="clone"]').checked = true;
+                const cloneRadio = document.querySelector('input[name="voice_mode"][value="clone"]');
+                if (cloneRadio) {
+                    cloneRadio.checked = true;
+                    cloneRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
                 toggleVoiceOptionsDisplay();
             }
         }
+
+        if (presetData.name) {
+            updatePresetVisuals(presetData.name);
+        }
+
         if (showNotif) showNotification(`Preset "${presetData.name}" loaded.`, 'info', 3000);
-        // Only save the state if this was a direct user click, not an init call.
         if (isUserInteraction) {
             debouncedSaveState();
         }
@@ -510,28 +858,31 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // Ensure the container is clean or re-created
         audioPlayerContainer.innerHTML = `
-            <div class="audio-player-card">
-                <div class="p-6 sm:p-8">
-                    <h2 class="card-header">Generated Audio</h2>
-                    <div class="mb-5"><div id="waveform" class="waveform-container"></div></div>
-                    <div class="audio-player-controls">
-                        <div class="audio-player-buttons">
-                            <button id="play-btn" class="btn-primary flex items-center" disabled>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg>
+            <div class="card audio-player">
+                <div class="card__body">
+                    <h2 class="card__title">Generated Audio</h2>
+                    <div class="audio-player__waveform" id="waveform"></div>
+                    <div class="audio-player__controls">
+                        <div class="audio-player__buttons">
+                            <button id="play-btn" class="btn primary" disabled>
+                                <svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" />
+                                </svg>
                                 <span>Play</span>
                             </button>
-                            <a id="download-link" href="#" download="tts_output.wav" class="btn-secondary flex items-center opacity-50 pointer-events-none">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5">
-                                  <path fill-rule="evenodd" d="M10 3a.75.75 0 01.75.75v6.638l1.96-2.158a.75.75 0 111.08 1.04l-3.25 3.5a.75.75 0 01-1.08 0l-3.25-3.5a.75.75 0 111.08-1.04l1.96 2.158V3.75A.75.75 0 0110 3zM3.75 13a.75.75 0 01.75.75v.008c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V13.75a.75.75 0 011.5 0v.008c0 1.518-1.232 2.75-2.75 2.75h-8.5C4.232 16.5 3 15.268 3 13.75v-.008A.75.75 0 013.75 13z" clip-rule="evenodd" />
+                            <a id="download-link" href="#" download="tts_output.wav" class="btn secondary disabled">
+                                <svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z"/>
+                                    <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z"/>
                                 </svg>
                                 <span>Download</span>
                             </a>
                         </div>
-                        <div class="audio-player-info text-xs sm:text-sm">
-                            Mode: <span id="player-voice-mode" class="font-medium text-indigo-600 dark:text-indigo-400">--</span>
+                        <div class="audio-player__info">
+                            Mode: <span id="player-voice-mode" class="text-primary">--</span>
                             <span id="player-voice-file-details"></span>
-                            <span class="mx-1">•</span> Gen Time: <span id="player-gen-time" class="font-medium tabular-nums">--s</span>
-                            <span class="mx-1">•</span> Duration: <span id="audio-duration" class="font-medium tabular-nums">--:--</span>
+                            <span class="separator">•</span> Gen Time: <span id="player-gen-time" class="tabular-nums">--s</span>
+                            <span class="separator">•</span> Duration: <span id="audio-duration" class="tabular-nums">--:--</span>
                         </div>
                     </div>
                 </div>
@@ -567,8 +918,8 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
         if (playerGenTimeSpan) playerGenTimeSpan.textContent = resultDetails.genTime ? `${resultDetails.genTime}s` : '--s';
 
-        const playIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg><span>Play</span>`;
-        const pauseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" /></svg><span>Pause</span>`;
+        const playIconSVG = `<svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg><span>Play</span>`;
+        const pauseIconSVG = `<svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Zm4 0a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" /></svg><span>Pause</span>`;
         const isDark = document.documentElement.classList.contains('dark');
 
         wavesurfer = WaveSurfer.create({
@@ -580,8 +931,14 @@ document.addEventListener('DOMContentLoaded', async function () {
         wavesurfer.on('ready', () => {
             const duration = wavesurfer.getDuration();
             if (audioDurationSpan) audioDurationSpan.textContent = formatTime(duration);
-            if (playBtn) { playBtn.disabled = false; playBtn.innerHTML = playIconSVG; }
-            if (downloadLink) { downloadLink.classList.remove('opacity-50', 'pointer-events-none'); downloadLink.setAttribute('aria-disabled', 'false'); }
+            if (playBtn) {
+                playBtn.disabled = false;
+                playBtn.innerHTML = playIconSVG;
+            }
+            if (downloadLink) {
+                downloadLink.classList.remove('disabled');
+                downloadLink.removeAttribute('aria-disabled');
+            }
         });
         wavesurfer.on('play', () => { if (playBtn) playBtn.innerHTML = pauseIconSVG; });
         wavesurfer.on('pause', () => { if (playBtn) playBtn.innerHTML = playIconSVG; });
@@ -1030,5 +1387,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         });
     }
 
+    // Call fetchInitialData at the end of setup to kick everything off.
+    // Note: This calls initializeApplication internally.
     await fetchInitialData();
 });
