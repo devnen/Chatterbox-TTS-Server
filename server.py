@@ -247,6 +247,146 @@ templates = Jinja2Templates(directory=str(ui_static_path))
 
 # --- API Endpoints ---
 
+# --- Audio Stitching Helper Functions ---
+# These functions support smart audio chunk concatenation with crossfading
+
+
+def _generate_equal_power_curves(n_samples: int):
+    """
+    Generate equal-power crossfade curves using cos²/sin² functions.
+    These curves maintain perceptually constant loudness during transitions.
+
+    Args:
+        n_samples: Number of samples in the fade region
+
+    Returns:
+        Tuple of (fade_out, fade_in) numpy arrays
+    """
+    t = np.linspace(0, np.pi / 2, n_samples, dtype=np.float32)
+    fade_out = np.cos(t) ** 2  # 1 → 0
+    fade_in = np.sin(t) ** 2  # 0 → 1
+    return fade_out, fade_in
+
+
+def _crossfade_with_overlap(
+    chunk_a: np.ndarray, chunk_b: np.ndarray, fade_samples: int
+) -> np.ndarray:
+    """
+    Perform true crossfade by overlapping and summing audio regions.
+
+    This creates a seamless transition by:
+    1. Taking the tail of chunk_a and head of chunk_b
+    2. Applying equal-power fade curves
+    3. Summing the overlapped regions
+
+    Result length = len(chunk_a) + len(chunk_b) - fade_samples
+
+    Args:
+        chunk_a: First audio chunk (numpy float32 array)
+        chunk_b: Second audio chunk (numpy float32 array)
+        fade_samples: Number of samples to overlap
+
+    Returns:
+        Crossfaded audio as numpy float32 array
+    """
+    # Handle edge cases
+    fade_samples = min(fade_samples, len(chunk_a), len(chunk_b))
+    if fade_samples <= 0:
+        return np.concatenate([chunk_a, chunk_b])
+
+    fade_out, fade_in = _generate_equal_power_curves(fade_samples)
+
+    # Extract overlap regions
+    a_tail = chunk_a[-fade_samples:]
+    b_head = chunk_b[:fade_samples]
+
+    # Crossfade: weighted sum of overlapping regions
+    crossfaded_region = (a_tail * fade_out) + (b_head * fade_in)
+
+    # Assemble: [chunk_a without tail] + [crossfaded region] + [chunk_b without head]
+    return np.concatenate(
+        [chunk_a[:-fade_samples], crossfaded_region, chunk_b[fade_samples:]]
+    )
+
+
+def _apply_edge_fades(
+    chunk: np.ndarray, fade_samples: int, fade_in: bool = True, fade_out: bool = True
+) -> np.ndarray:
+    """
+    Apply minimal linear edge fades for click protection.
+
+    This is used in fallback mode when full crossfading is disabled.
+    Linear fades are acceptable for ultra-short safety fades (2-3ms).
+
+    Args:
+        chunk: Audio chunk (numpy array)
+        fade_samples: Number of samples to fade
+        fade_in: Whether to apply fade-in at start
+        fade_out: Whether to apply fade-out at end
+
+    Returns:
+        Audio chunk with edge fades applied (numpy float32 array)
+    """
+    # Skip if chunk is too short for fading
+    if len(chunk) < fade_samples * 2:
+        return chunk.astype(np.float32, copy=False)
+
+    result = chunk.astype(np.float32, copy=True)
+
+    if fade_in:
+        result[:fade_samples] *= np.linspace(0, 1, fade_samples, dtype=np.float32)
+    if fade_out:
+        result[-fade_samples:] *= np.linspace(1, 0, fade_samples, dtype=np.float32)
+
+    return result
+
+
+def _remove_dc_offset(
+    audio: np.ndarray, sample_rate: int, cutoff_hz: float = 15.0
+) -> np.ndarray:
+    """
+    Remove DC offset using a high-pass Butterworth filter.
+
+    DC offset can cause low-frequency thumps when concatenating audio chunks.
+    This applies a 2nd-order high-pass filter at the specified cutoff frequency.
+
+    Args:
+        audio: Audio data (numpy array)
+        sample_rate: Sample rate in Hz
+        cutoff_hz: High-pass filter cutoff frequency (default 15 Hz)
+
+    Returns:
+        Audio with DC offset removed (numpy float32 array)
+
+    Note:
+        Requires scipy. If scipy is not available, returns audio unchanged
+        with a warning logged.
+    """
+    try:
+        from scipy.signal import butter, filtfilt
+
+        nyquist = sample_rate / 2
+        normalized_cutoff = cutoff_hz / nyquist
+
+        # 2nd-order Butterworth high-pass filter
+        b, a = butter(2, normalized_cutoff, btype="high")
+
+        # Zero-phase filtering (no phase distortion)
+        return filtfilt(b, a, audio).astype(np.float32)
+
+    except ImportError:
+        logger.warning(
+            "scipy not available for DC offset removal. "
+            "Install scipy to enable this feature: pip install scipy"
+        )
+        return audio.astype(np.float32, copy=False)
+    except Exception as e:
+        logger.error(f"DC offset removal failed: {e}")
+        return audio.astype(np.float32, copy=False)
+
+
+# --- End Audio Stitching Helper Functions ---
+
 
 # --- Main UI Route ---
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -862,39 +1002,114 @@ async def custom_tts_endpoint(
         )
 
     try:
-        # ### MODIFICATION START ###
-        # First, concatenate all raw chunks into a single audio clip.
-        final_audio_np = (
-            np.concatenate(all_audio_segments_np)
-            if len(all_audio_segments_np) > 1
-            else all_audio_segments_np[0]
+        # ### SMART AUDIO STITCHING ###
+        # Local constants - adjust these values to tune stitching behavior
+        SENTENCE_PAUSE_MS = 200  # Desired audible silence between sentences
+        CROSSFADE_MS = 20  # Crossfade duration for smart mode (10-50ms recommended)
+        SAFETY_FADE_MS = 3  # Minimal edge fade for fallback mode (2-5ms)
+        ENABLE_DC_REMOVAL = False  # Set True if you hear low-frequency thumps
+        DC_HIGHPASS_HZ = 15  # High-pass cutoff for DC removal
+        PEAK_NORMALIZE_THRESHOLD = 0.99  # Normalize if peak exceeds this
+        PEAK_NORMALIZE_TARGET = 0.95  # Target peak after normalization
+
+        # Read smart stitching toggle from config (defaults to True)
+        enable_smart_stitching = config_manager.get_bool(
+            "audio_processing.enable_crossfade", True
         )
-        perf_monitor.record("All audio chunks processed and concatenated")
 
-        # Now, apply all audio processing to the COMPLETE audio clip.
-        if config_manager.get_bool("audio_processing.enable_silence_trimming", False):
-            final_audio_np = utils.trim_lead_trail_silence(
-                final_audio_np, engine_output_sample_rate
+        # --- Sample rate validation ---
+        if not engine_output_sample_rate or engine_output_sample_rate <= 0:
+            logger.error(
+                f"Invalid sample rate: {engine_output_sample_rate}, "
+                "falling back to raw concatenation"
             )
-            perf_monitor.record(f"Global silence trim applied")
+            final_audio_np = (
+                np.concatenate(all_audio_segments_np)
+                if len(all_audio_segments_np) > 1
+                else all_audio_segments_np[0]
+            )
 
-        if config_manager.get_bool(
-            "audio_processing.enable_internal_silence_fix", False
-        ):
-            final_audio_np = utils.fix_internal_silence(
-                final_audio_np, engine_output_sample_rate
-            )
-            perf_monitor.record(f"Global internal silence fix applied")
+        elif len(all_audio_segments_np) == 1:
+            # Single chunk - no stitching needed
+            final_audio_np = all_audio_segments_np[0]
 
-        if (
-            config_manager.get_bool("audio_processing.enable_unvoiced_removal", False)
-            and utils.PARSELMOUTH_AVAILABLE
-        ):
-            final_audio_np = utils.remove_long_unvoiced_segments(
-                final_audio_np, engine_output_sample_rate
+        elif enable_smart_stitching:
+            # --- Smart mode: true crossfading with silence insertion ---
+            fade_samples = int(CROSSFADE_MS / 1000 * engine_output_sample_rate)
+
+            # Calculate silence buffer with compensation for crossfade overlap
+            # Each crossfade removes fade_samples from silence (one at each end)
+            desired_silence_samples = int(
+                SENTENCE_PAUSE_MS / 1000 * engine_output_sample_rate
             )
-            perf_monitor.record(f"Global unvoiced removal applied")
-        # ### MODIFICATION END ###
+            silence_buffer_samples = desired_silence_samples + (fade_samples * 2)
+
+            # Preprocess chunks: convert to float32 and optionally remove DC offset
+            chunks = []
+            for chunk in all_audio_segments_np:
+                processed = chunk.astype(np.float32, copy=True)
+                if ENABLE_DC_REMOVAL:
+                    processed = _remove_dc_offset(
+                        processed, engine_output_sample_rate, DC_HIGHPASS_HZ
+                    )
+                chunks.append(processed)
+
+            # Start with first chunk
+            result = chunks[0]
+
+            # Stitch remaining chunks with crossfaded silence gaps
+            for i in range(1, len(chunks)):
+                # Create silence buffer (oversized to compensate for crossfade overlap)
+                silence = np.zeros(silence_buffer_samples, dtype=np.float32)
+
+                # Crossfade: current result → silence (speech fades into silence)
+                result = _crossfade_with_overlap(result, silence, fade_samples)
+
+                # Crossfade: result → next chunk (silence fades into speech)
+                result = _crossfade_with_overlap(result, chunks[i], fade_samples)
+
+            final_audio_np = result
+            logger.debug(
+                f"Smart stitching applied: {CROSSFADE_MS}ms equal-power crossfades, "
+                f"{SENTENCE_PAUSE_MS}ms pauses, "
+                f"DC removal={'enabled' if ENABLE_DC_REMOVAL else 'disabled'}"
+            )
+
+        else:
+            # --- Fallback mode: minimal safety edge fades, no silence ---
+            fade_samples = int(SAFETY_FADE_MS / 1000 * engine_output_sample_rate)
+            num_chunks = len(all_audio_segments_np)
+
+            processed_chunks = []
+            for i, chunk in enumerate(all_audio_segments_np):
+                is_first = i == 0
+                is_last = i == num_chunks - 1
+
+                processed = _apply_edge_fades(
+                    chunk,
+                    fade_samples,
+                    fade_in=(not is_first),  # No fade-in on first chunk
+                    fade_out=(not is_last),  # No fade-out on last chunk
+                )
+                processed_chunks.append(processed)
+
+            final_audio_np = np.concatenate(processed_chunks)
+            logger.debug(
+                f"Safety edge fades applied: {SAFETY_FADE_MS}ms linear fades, no pauses"
+            )
+
+        # --- Ensure float32 dtype for all code paths ---
+        final_audio_np = final_audio_np.astype(np.float32, copy=False)
+
+        # --- Normalize to prevent clipping ---
+        peak_amplitude = np.abs(final_audio_np).max()
+        if peak_amplitude > PEAK_NORMALIZE_THRESHOLD:
+            final_audio_np = final_audio_np * (PEAK_NORMALIZE_TARGET / peak_amplitude)
+            logger.warning(
+                f"Audio normalized to prevent clipping (peak was {peak_amplitude:.3f})"
+            )
+
+        perf_monitor.record("Audio chunks stitched")
 
     except ValueError as e_concat:
         logger.error(f"Audio concatenation failed: {e_concat}", exc_info=True)
