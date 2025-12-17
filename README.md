@@ -215,7 +215,6 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 | NVIDIA RTX 5090 / Blackwell | `--nvidia-cu128` | requirements-nvidia-cu128.txt | 570+ |
 | AMD RX 6000/7000 (Linux) | `--rocm` | requirements-rocm.txt | ROCm 6.4+ |
 | Apple Silicon (M1/M2/M3/M4) | Manual install | See Option 4 | macOS 12.3+ |
-```
 
 ---
 
@@ -1215,7 +1214,7 @@ You can find it here: [https://opensource.org/licenses/MIT](https://opensource.o
 
 *   **Core Model:** This project utilizes the **[Chatterbox TTS model](https://github.com/resemble-ai/chatterbox)** by **[Resemble AI](https://www.resemble.ai/)**.
 *   **UI Inspiration:** Special thanks to **[Lex-au](https://github.com/Lex-au)** whose **[Orpheus-FastAPI](https://github.com/Lex-au/Orpheus-FastAPI)** project served as inspiration for the web interface design.
-*   **Similar Project:** This server shares architectural similarities with our [Dia-TTS-Server](https://github.com/devnen/Dia-TTS-Server) project, which uses a different TTS engine.
+*   **Similar Project:** This server shares architectural similarities with our [Dia-TTS-Server](https://github.com/devnen/Dia-TTS-Server) and [Kitten-TTS-Server](https://github.com/devnen/Kitten-TTS-Server) projects, which use different TTS engines.
 *   **Containerization Technologies:** [Docker](https://www.docker.com/) and [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
 *   **Core Libraries:**
     *   [FastAPI](https://fastapi.tiangolo.com/)
@@ -1226,4 +1225,3 @@ You can find it here: [https://opensource.org/licenses/MIT](https://opensource.o
     *   [SoundFile](https://python-soundfile.readthedocs.io/) & [libsndfile](http://www.mega-nerd.com/libsndfile/)
     *   [Jinja2](https://jinja.palletsprojects.com/)
     *   [WaveSurfer.js](https://wavesurfer.xyz/)
-    *   [Tailwind CSS](https://tailwindcss.com/) (via CDN)
