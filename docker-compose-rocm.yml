@@ -42,6 +42,7 @@ services:
     environment:
       # Enable faster Hugging Face downloads
       - HF_HUB_ENABLE_HF_TRANSFER=1
+      - HF_TOKEN=YOUR_TOKEN_HERE
       # NOTE: HSA_OVERRIDE_GFX_VERSION should only be set by users with unsupported GPUs
       # Example usage: HSA_OVERRIDE_GFX_VERSION=10.3.0 docker compose up
       # Common values: 10.3.0 (RX 5000/6000), 11.0.0 (RX 7000), 9.0.6 (Vega)
