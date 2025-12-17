@@ -1000,7 +1000,6 @@ async def custom_tts_endpoint(
         raise HTTPException(
             status_code=500, detail="Failed to determine engine sample rate."
         )
-
     try:
         # ### SMART AUDIO STITCHING ###
         # Local constants - adjust these values to tune stitching behavior
@@ -1032,6 +1031,7 @@ async def custom_tts_endpoint(
         elif len(all_audio_segments_np) == 1:
             # Single chunk - no stitching needed
             final_audio_np = all_audio_segments_np[0]
+            logger.info("Single audio chunk - no stitching required")
 
         elif enable_smart_stitching:
             # --- Smart mode: true crossfading with silence insertion ---
@@ -1069,10 +1069,9 @@ async def custom_tts_endpoint(
                 result = _crossfade_with_overlap(result, chunks[i], fade_samples)
 
             final_audio_np = result
-            logger.debug(
-                f"Smart stitching applied: {CROSSFADE_MS}ms equal-power crossfades, "
-                f"{SENTENCE_PAUSE_MS}ms pauses, "
-                f"DC removal={'enabled' if ENABLE_DC_REMOVAL else 'disabled'}"
+            logger.info(
+                f"Smart stitching applied: {len(chunks)} chunks, "
+                f"{CROSSFADE_MS}ms crossfades, {SENTENCE_PAUSE_MS}ms pauses"
             )
 
         else:
@@ -1094,8 +1093,9 @@ async def custom_tts_endpoint(
                 processed_chunks.append(processed)
 
             final_audio_np = np.concatenate(processed_chunks)
-            logger.debug(
-                f"Safety edge fades applied: {SAFETY_FADE_MS}ms linear fades, no pauses"
+            logger.info(
+                f"Safety edge fades applied: {num_chunks} chunks, "
+                f"{SAFETY_FADE_MS}ms linear fades"
             )
 
         # --- Ensure float32 dtype for all code paths ---
@@ -1111,12 +1111,46 @@ async def custom_tts_endpoint(
 
         perf_monitor.record("Audio chunks stitched")
 
+        # --- Global Audio Post-Processing (applied to complete stitched audio) ---
+        if config_manager.get_bool("audio_processing.enable_silence_trimming", False):
+            final_audio_np = utils.trim_lead_trail_silence(
+                final_audio_np, engine_output_sample_rate
+            )
+            perf_monitor.record("Global silence trim applied")
+
+        if config_manager.get_bool(
+            "audio_processing.enable_internal_silence_fix", False
+        ):
+            final_audio_np = utils.fix_internal_silence(
+                final_audio_np, engine_output_sample_rate
+            )
+            perf_monitor.record("Global internal silence fix applied")
+
+        if (
+            config_manager.get_bool("audio_processing.enable_unvoiced_removal", False)
+            and utils.PARSELMOUTH_AVAILABLE
+        ):
+            final_audio_np = utils.remove_long_unvoiced_segments(
+                final_audio_np, engine_output_sample_rate
+            )
+            perf_monitor.record("Global unvoiced removal applied")
+
+        # --- Warn about potentially conflicting settings ---
+        if enable_smart_stitching and config_manager.get_bool(
+            "audio_processing.enable_silence_trimming", False
+        ):
+            logger.warning(
+                "Smart stitching adds sentence pauses, but silence trimming is enabled. "
+                "Leading/trailing pauses may be removed."
+            )
+        # ### SMART AUDIO STITCHING END ###
+
     except ValueError as e_concat:
-        logger.error(f"Audio concatenation failed: {e_concat}", exc_info=True)
+        logger.error(f"Audio concatenation/stitching failed: {e_concat}", exc_info=True)
         for idx, seg in enumerate(all_audio_segments_np):
             logger.error(f"Segment {idx} shape: {seg.shape}, dtype: {seg.dtype}")
         raise HTTPException(
-            status_code=500, detail=f"Audio concatenation error: {e_concat}"
+            status_code=500, detail=f"Audio stitching error: {e_concat}"
         )
 
     output_format_str = (
