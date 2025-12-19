@@ -52,31 +52,36 @@ Notes:
 
 ```
 %%bash
-set -e
+set -euo pipefail
 
 cd /content
 MICROMAMBA="/content/bin/micromamba"
 
-# Sanity check
+ts() { date +"[%Y-%m-%d %H:%M:%S]"; }
+
+echo "$(ts) Sanity check micromamba:"
 ls -lah "$MICROMAMBA"
 
-# Upgrade pip tooling inside the env
-"$MICROMAMBA" run -n cb311 python -m pip install -U pip setuptools wheel
+echo "$(ts) Upgrading pip tooling inside cb311..."
+"$MICROMAMBA" run -n cb311 python -m pip install -U pip setuptools wheel --progress-bar on
 
-echo "📦 Installing PyTorch 2.5.1 (CUDA 12.1)..."
-"$MICROMAMBA" run -n cb311 pip install -q \
+echo "$(ts) Installing PyTorch 2.5.1 (CUDA 12.1)... (this can take a while)"
+"$MICROMAMBA" run -n cb311 pip install \
+  --progress-bar on \
   torch==2.5.1+cu121 torchaudio==2.5.1+cu121 torchvision==0.20.1+cu121 \
   --index-url https://download.pytorch.org/whl/cu121
 
-echo "📦 Installing ONNX (prebuilt wheel)..."
-"$MICROMAMBA" run -n cb311 pip install -q onnx==1.16.0
+echo "$(ts) Installing ONNX (wheel)..."
+"$MICROMAMBA" run -n cb311 pip install --progress-bar on onnx==1.16.0
 
-echo "🎙️ Installing Chatterbox package (from GitHub)..."
+echo "$(ts) Installing Chatterbox package (from GitHub, no-cache, upgrade)..."
 "$MICROMAMBA" run -n cb311 pip uninstall -y chatterbox-tts chatterbox || true
-"$MICROMAMBA" run -n cb311 pip install --no-cache-dir --upgrade -q \
+"$MICROMAMBA" run -n cb311 pip install \
+  --no-cache-dir --upgrade \
+  --progress-bar on \
   "chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master"
 
-echo "✅ Installation complete!"
+echo "$(ts) ✅ Installation complete!"
 ```
 
 ---
