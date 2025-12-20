@@ -22,14 +22,17 @@
 # ============================================================================
 
 # --- PyTorch CUDA 12.8 Package Index ---
---extra-index-url https://download.pytorch.org/whl/cu128
+#--extra-index-url https://download.pytorch.org/whl/cu130
 
 # --- Deep Learning Framework (CUDA 12.8) ---
 # PyTorch 2.8.0 with CUDA 12.8 - includes sm_120 (Blackwell) support
-torch==2.8.0
-torchvision==0.23.0
-torchaudio==2.8.0
+#torch==2.9.0
+#torchvision==0.24.0
+#torchaudio==2.9.0
 
+# Chatterbox TTS engine - Install from chatterbox-v2 fork
+chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git@master
+#    pip3 install --no-cache-dir --no-deps git+https://github.com/resemble-ai/chatterbox.git;
 # --- Core Web Framework ---
 fastapi
 uvicorn[standard]
