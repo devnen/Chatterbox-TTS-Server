@@ -29,35 +29,18 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 WORKDIR /app
 
 # Upgrade pip first
-RUN pip3 install --no-cache-dir --upgrade pip
+#RUN pip3 install --upgrade pip
+COPY requirements-nvidia-cu128.txt .
 
-# CRITICAL: Install PyTorch 2.8.0 FIRST for RTX 5090 (sm_120) support with CUDA 12.8
-# This must be done before any other packages that depend on PyTorch
+# Upgrade pip and install Python dependencies
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements-nvidia-cu128.txt
+
+
 RUN if [ "$RUNTIME" = "nvidia" ]; then \
     pip3 install --no-cache-dir \
-    --index-url https://download.pytorch.org/whl/cu128 \
-    torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0; \
-    fi
-
-# Copy requirements files
-COPY requirements.txt .
-
-# Install base dependencies (excluding PyTorch/chatterbox which are already installed or will be installed separately)
-# We need to skip torch*, chatterbox-tts, and index URLs since we're using CUDA 12.8
-RUN grep -v '^torch' requirements.txt | \
-    grep -v '^chatterbox-tts' | \
-    grep -v '^--extra-index-url' | \
-    grep -v '^#' | \
-    grep -v '^$' > /tmp/requirements-filtered.txt && \
-    pip3 install --no-cache-dir -r /tmp/requirements-filtered.txt
-
-# Install NVIDIA-specific dependencies
-# Install all chatterbox dependencies first, then install chatterbox with --no-deps
-RUN if [ "$RUNTIME" = "nvidia" ]; then \
-    pip3 install --no-cache-dir \
-    transformers diffusers resemble-perth s3tokenizer \
-    resampy omegaconf conformer && \
-    pip3 install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox.git; \
+      --index-url https://download.pytorch.org/whl/cu128 \
+      torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 ; \
     fi
 
 # Copy the rest of the application code
