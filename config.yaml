@@ -9,7 +9,7 @@ server:
   log_file_max_size_mb: 10
   log_file_backup_count: 5
 model:
-  repo_id: chatterbox-turbo
+  repo_id: chatterbox-multilingual
 tts_engine:
   device: cuda
   predefined_voices_path: voices
@@ -31,35 +31,21 @@ audio_output:
   max_reference_duration_sec: 30
   save_to_disk: false
 ui_state:
-  last_text: '[gasp] Okay, we have fifteen minutes left! Fifteen minutes! [groan]
-    How have we been in here for forty-five minutes and only solved two puzzles?!
-    [clear throat] Let''s think logically. [sniff] This room smells like fear and
-    bad decisions. [cough] And also someone''s very strong cologne, Kevin. [sigh]
-    Okay, the clue says "the answer lies where time stands still." [chuckle] Great,
-    very helpful, very straightforward. [shush] Everyone stop talking for one second!
-    [gasp] Wait, the clock on the wall! It''s stuck at three fifteen! [laugh] That''s
-    it! That has to be it! [groan] It''s not the combination. Of course it''s not
-    the combination. [sniff] Why would anything in this room be logical? [sigh] Has
-    anyone checked under the carpet? [gasp] There''s a hidden compartment! [chuckle]
-    Kevin, you''re standing on a clue! Classic Kevin! [clear throat] Okay, it''s another
-    riddle. "What has keys but no locks, space but no room, and you can enter but
-    can''t go inside?" [groan] Who writes these things?! [cough] A keyboard! It''s
-    a keyboard! [laugh] There''s a keyboard painted on the wall! [gasp] Eight minutes!
-    We have eight minutes! [sigh] If we don''t escape this room, we''re never speaking
-    of this again. [shush] Focus, everyone! [chuckle] We''re so close I can taste
-    freedom! [sniff] That or more of Kevin''s cologne!
-
-    '
-  last_voice_mode: predefined
-  last_predefined_voice: Emily.wav
-  last_reference_file: Gianna.wav
-  last_seed: 3000
-  last_chunk_size: 240
-  last_split_text_enabled: true
+  last_text: "cheinsau Men n\xE3o \xE9 s\xF3 sangue e caos: \xE9 um retrato sujo de\
+    \ desejo, car\xEAncia e sobreviv\xEAncia. D\xEAnji n\xE3o quer \u201Csalvar o\
+    \ mundo\u201D; ele quer um motivo simples pra continuar vivo, e \xE9 isso que\
+    \ deixa tudo mais inc\xF4modo e humano.\n"
+  last_voice_mode: clone
+  last_predefined_voice: Adrian.wav
+  last_reference_file: download.wav
+  last_seed: 0
+  last_chunk_size: 130
+  last_split_text_enabled: false
   hide_chunk_warning: false
-  hide_generation_warning: false
-  theme: light
-  last_preset_name: "\u26A1 Turbo: Escape Room Panic"
+  hide_generation_warning: true
+  theme: dark
+  last_language: pt
+  last_preset_name: "\u26A1 Turbo: The Emotional Movie Reviewer"
 ui:
   title: Chatterbox TTS Server
   show_language_select: true

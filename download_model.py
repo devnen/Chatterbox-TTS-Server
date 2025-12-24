@@ -24,6 +24,20 @@ except ImportError:
     exit(1)
 
 
+# Map UI sentinel values to actual Hugging Face repository IDs.
+MODEL_REPO_MAP = {
+    "chatterbox": "ResembleAI/chatterbox",
+    "original": "ResembleAI/chatterbox",
+    "resembleai/chatterbox": "ResembleAI/chatterbox",
+    "chatterbox-multilingual": "ResembleAI/chatterbox",
+    "multilingual": "ResembleAI/chatterbox",
+    "resembleai/chatterbox-multilingual": "ResembleAI/chatterbox",
+    "chatterbox-turbo": "ResembleAI/chatterbox-turbo",
+    "turbo": "ResembleAI/chatterbox-turbo",
+    "resembleai/chatterbox-turbo": "ResembleAI/chatterbox-turbo",
+}
+
+
 # Define the list of core model files expected by the TTS engine.
 # These correspond to files typically found in the Hugging Face repository
 # for the ChatterboxTTS engine.
@@ -33,6 +47,10 @@ CHATTERBOX_MODEL_FILES = [
     "s3gen.pt",  # S3Gen model (Token-to-Waveform)
     "tokenizer.json",  # Text tokenizer configuration
     "conds.pt",  # Default conditioning data (e.g., for default voice)
+    # "ve.safetensors",
+    # "t3_cfg.safetensors",
+    # "t3_mtl23ls_v2.safetensors",
+    # "s3gen.safetensors",
 ]
 
 
@@ -48,7 +66,10 @@ def download_engine_files():
     )
     model_cache_path = Path(model_cache_path_str).resolve()  # Ensure absolute path
 
-    model_repo_id = config_manager.get_string("model.repo_id", "ResembleAI/chatterbox")
+    configured_repo_id = config_manager.get_string(
+        "model.repo_id", "ResembleAI/chatterbox"
+    )
+    model_repo_id = _resolve_model_repo_id(configured_repo_id)
 
     logger.info(f"Target model repository: {model_repo_id}")
     logger.info(f"Local download directory: {model_cache_path}")
@@ -104,4 +125,26 @@ if __name__ == "__main__":
         )
         exit(1)  # Exit with error code if essential downloads failed
 
+
 # --- End File: download_model.py ---
+def _resolve_model_repo_id(raw_value: str) -> str:
+    """
+    Resolves UI sentinel values (e.g., 'chatterbox-multilingual') to actual
+    Hugging Face repository IDs required by hf_hub_download.
+    """
+    if not raw_value:
+        return "ResembleAI/chatterbox"
+
+    normalized = raw_value.lower().strip()
+    resolved = MODEL_REPO_MAP.get(normalized)
+    if resolved:
+        if resolved != raw_value:
+            logger.info(
+                f"Resolved model repo '{raw_value}' to Hugging Face repo '{resolved}'."
+            )
+        return resolved
+
+    logger.info(
+        f"Using custom/explicit model repo id '{raw_value}' (no sentinel mapping applied)."
+    )
+    return raw_value

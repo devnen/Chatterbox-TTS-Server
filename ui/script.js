@@ -26,12 +26,17 @@ document.addEventListener('DOMContentLoaded', async function () {
     let hideChunkWarning = false;
     let hideGenerationWarning = false;
     let currentVoiceMode = 'predefined';
+    let supportedLanguages = null;
 
     const IS_LOCAL_FILE = window.location.protocol === 'file:';
     // If you always access the server via localhost
     const API_BASE_URL = IS_LOCAL_FILE ? 'http://localhost:8004' : '';
 
     const DEBOUNCE_DELAY_MS = 750;
+    const FALLBACK_LANGUAGES = {
+        en: 'English',
+        pt: 'Portuguese',
+    };
 
 
     // --- DOM Element Selectors ---
@@ -138,6 +143,16 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     // --- Utility Functions ---
+    function getSelectorForModelType(modelType) {
+        switch ((modelType || '').toLowerCase()) {
+            case 'turbo':
+                return 'chatterbox-turbo';
+            case 'multilingual':
+                return 'chatterbox-multilingual';
+            default:
+                return 'chatterbox';
+        }
+    }
     function showNotification(message, type = 'info', duration = 5000) {
         if (!notificationArea) return null;
 
@@ -185,6 +200,40 @@ document.addEventListener('DOMContentLoaded', async function () {
         return notificationDiv;
     }
 
+    function getLanguageOptionsMap() {
+        if (supportedLanguages && Object.keys(supportedLanguages).length > 0) {
+            return supportedLanguages;
+        }
+        return FALLBACK_LANGUAGES;
+    }
+
+    function populateLanguageOptions() {
+        if (!languageSelect) return;
+        const optionsMap = getLanguageOptionsMap();
+        const entries = Object.entries(optionsMap);
+        if (entries.length === 0) return;
+
+        const desiredValue =
+            currentUiState.last_language ||
+            (currentConfig?.generation_defaults?.language) ||
+            languageSelect.value ||
+            'en';
+
+        languageSelect.innerHTML = '';
+        entries
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .forEach(([code, label]) => {
+                const optionEl = document.createElement('option');
+                optionEl.value = code;
+                optionEl.textContent = `${label} (${code.toUpperCase()})`;
+                languageSelect.appendChild(optionEl);
+            });
+
+        if (optionsMap[desiredValue]) {
+            languageSelect.value = desiredValue;
+        }
+    }
+
     function formatTime(seconds) {
         const minutes = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
@@ -230,6 +279,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             hide_generation_warning: hideGenerationWarning,
             theme: localStorage.getItem('uiTheme') || 'dark',
             last_preset_name: currentPresetName,
+            last_language: languageSelect ? languageSelect.value : (currentConfig?.generation_defaults?.language || 'en'),
         };
 
         try {
@@ -282,11 +332,16 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (modelIndicator && modelBadge) {
             modelIndicator.classList.remove('hidden');
 
-            // Use simplified modifier classes
-            modelBadge.className = modelInfo.type === 'turbo'
-                ? 'model-badge turbo'
-                : 'model-badge original';
-            modelBadgeText.textContent = modelInfo.type === 'turbo' ? '⚡ Turbo' : 'Original';
+            if (modelInfo.type === 'turbo') {
+                modelBadge.className = 'model-badge turbo';
+                modelBadgeText.textContent = '⚡ Turbo';
+            } else if (modelInfo.type === 'multilingual') {
+                modelBadge.className = 'model-badge multilingual';
+                modelBadgeText.textContent = '🌍 Multilingual';
+            } else {
+                modelBadge.className = 'model-badge original';
+                modelBadgeText.textContent = 'Original';
+            }
         }
 
         // Update model status indicator
@@ -304,7 +359,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // Update model selector dropdown to match loaded model
         if (modelSelect && !modelChangesPending) {
-            const selectorValue = modelInfo.type === 'turbo' ? 'chatterbox-turbo' : 'chatterbox';
+            const selectorValue = getSelectorForModelType(modelInfo.type);
             modelSelect.value = selectorValue;
             selectedModelSelector = selectorValue;
         }
@@ -371,7 +426,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (!modelSelect) return;
 
         const newSelector = modelSelect.value;
-        const currentSelector = currentModelInfo?.type === 'turbo' ? 'chatterbox-turbo' : 'chatterbox';
+        const currentSelector = getSelectorForModelType(currentModelInfo?.type);
 
         if (newSelector !== currentSelector) {
             modelChangesPending = true;
@@ -492,6 +547,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         document.title = pageTitle;
         if (appTitleLink) appTitleLink.textContent = pageTitle;
         if (ttsFormHeader) ttsFormHeader.textContent = `Generate Speech`;
+        populateLanguageOptions();
         loadInitialUiState();
         populatePredefinedVoices();
         populateReferenceFiles();
@@ -523,6 +579,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             hideChunkWarning = currentUiState.hide_chunk_warning || false;
             hideGenerationWarning = currentUiState.hide_generation_warning || false;
             currentVoiceMode = currentUiState.last_voice_mode || 'predefined';
+            supportedLanguages = (data.supported_languages && Object.keys(data.supported_languages).length > 0)
+                ? data.supported_languages
+                : null;
 
             // NEW: Handle model info from initial data
             if (data.model_info) {
@@ -552,6 +611,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     function loadInitialUiState() {
+        const genDefaults = currentConfig.generation_defaults || {};
         if (textArea && currentUiState.last_text) {
             textArea.value = currentUiState.last_text;
             if (charCount) charCount.textContent = textArea.value.length;
@@ -576,7 +636,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         toggleVoiceOptionsDisplay();
 
         if (seedInput && currentUiState.last_seed !== undefined) seedInput.value = currentUiState.last_seed;
-        else if (seedInput && currentConfig?.generation_defaults?.seed !== undefined) seedInput.value = currentConfig.generation_defaults.seed;
+        else if (seedInput && genDefaults.seed !== undefined) seedInput.value = genDefaults.seed;
 
         if (splitTextToggle) splitTextToggle.checked = currentUiState.last_split_text_enabled !== undefined ? currentUiState.last_split_text_enabled : true;
 
@@ -584,7 +644,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (chunkSizeValue) chunkSizeValue.textContent = chunkSizeSlider ? chunkSizeSlider.value : '120';
         toggleChunkControlsVisibility();
 
-        const genDefaults = currentConfig.generation_defaults || {};
         if (temperatureSlider) temperatureSlider.value = genDefaults.temperature !== undefined ? genDefaults.temperature : 0.8;
         if (temperatureValueDisplay) temperatureValueDisplay.textContent = temperatureSlider.value;
         if (exaggerationSlider) exaggerationSlider.value = genDefaults.exaggeration !== undefined ? genDefaults.exaggeration : 0.5;
@@ -593,7 +652,10 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (cfgWeightValueDisplay) cfgWeightValueDisplay.textContent = cfgWeightSlider.value;
         if (speedFactorSlider) speedFactorSlider.value = genDefaults.speed_factor !== undefined ? genDefaults.speed_factor : 1.0;
         if (speedFactorValueDisplay) speedFactorValueDisplay.textContent = speedFactorSlider.value;
-        if (languageSelect) languageSelect.value = genDefaults.language || 'en';
+        if (languageSelect) {
+            const savedLanguage = currentUiState.last_language || genDefaults.language || 'en';
+            languageSelect.value = savedLanguage;
+        }
         if (outputFormatSelect) outputFormatSelect.value = currentConfig?.audio_output?.format || 'mp3';
 
         if (hideChunkWarningCheckbox) hideChunkWarningCheckbox.checked = hideChunkWarning;

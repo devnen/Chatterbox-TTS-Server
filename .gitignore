@@ -4,6 +4,7 @@
 *.pyd
 __pycache__/
 .ipynb_checkpoints/
+model_cache/
 
 # Ignore distribution build artifacts
 .dist/

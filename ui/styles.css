@@ -1042,6 +1042,12 @@ a.btn.disabled {
     color: var(--color-text-secondary);
 }
 
+.model-badge.multilingual {
+    background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%);
+    color: var(--color-text-inverse);
+    box-shadow: 0 2px 4px rgba(14, 165, 233, 0.3);
+}
+
 .model-badge__indicator {
     width: 0.5rem;
     height: 0.5rem;
@@ -1057,6 +1063,11 @@ a.btn.disabled {
 
 .model-badge.original .model-badge__indicator {
     background-color: var(--color-text-muted);
+}
+
+.model-badge.multilingual .model-badge__indicator {
+    background-color: #facc15;
+    box-shadow: 0 0 6px #facc15;
 }
 
 /* ============================================

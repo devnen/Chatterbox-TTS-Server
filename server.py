@@ -77,6 +77,7 @@ class OpenAISpeechRequest(BaseModel):
     response_format: Literal["wav", "opus", "mp3"] = "wav"  # Add "mp3"
     speed: float = 1.0
     seed: Optional[int] = None
+    language: Optional[str] = None
 
 
 # --- Logging Configuration ---
@@ -471,6 +472,7 @@ async def get_ui_initial_data():
             "presets": loaded_presets,
             "initial_gen_result": initial_gen_result_placeholder,
             "model_info": model_info,  # NEW: Include model information
+            "supported_languages": engine.get_supported_languages(),
         }
     except Exception as e:
         logger.error(f"Error preparing initial UI data for API: {e}", exc_info=True)
@@ -917,6 +919,8 @@ async def custom_tts_endpoint(
             status_code=400, detail="Text processing resulted in no usable chunks."
         )
 
+    language_for_engine = request.language or get_gen_default_language()
+
     for i, chunk in enumerate(text_chunks):
         logger.info(f"Synthesizing chunk {i+1}/{len(text_chunks)}...")
         try:
@@ -945,6 +949,7 @@ async def custom_tts_endpoint(
                 seed=(
                     request.seed if request.seed is not None else get_gen_default_seed()
                 ),
+                language=language_for_engine,
             )
             perf_monitor.record(f"Engine synthesized chunk {i+1}")
 
@@ -1250,6 +1255,8 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
         )
 
         # Synthesize the audio
+        language_for_engine = request.language or get_gen_default_language()
+
         audio_tensor, sr = engine.synthesize(
             text=request.input_,
             audio_prompt_path=str(audio_prompt_path),
@@ -1257,6 +1264,7 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
             exaggeration=get_gen_default_exaggeration(),
             cfg_weight=get_gen_default_cfg_weight(),
             seed=seed_to_use,
+            language=language_for_engine,
         )
 
         if audio_tensor is None or sr is None:

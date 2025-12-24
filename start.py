@@ -83,7 +83,7 @@ INSTALL_NAMES = {
 CHATTERBOX_REPO = "git+https://github.com/devnen/chatterbox-v2.git@master"
 
 # Timeout settings (seconds)
-SERVER_STARTUP_TIMEOUT = 180  # Model loading can be slow
+SERVER_STARTUP_TIMEOUT = 18000000000  # Model loading can be slow
 PORT_CHECK_INTERVAL = 0.5
 
 # Global verbose mode flag (set from args)

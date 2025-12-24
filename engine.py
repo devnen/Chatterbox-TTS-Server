@@ -6,7 +6,7 @@ import logging
 import random
 import numpy as np
 import torch
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 from pathlib import Path
 
 from chatterbox.tts import ChatterboxTTS  # Main TTS engine class
@@ -15,6 +15,8 @@ from chatterbox.models.s3gen.const import (
 )  # Default sample rate from the engine
 
 # Defensive Turbo import - Turbo may not be available in older package versions
+
+
 try:
     from chatterbox.tts_turbo import ChatterboxTurboTTS
 
@@ -23,8 +25,17 @@ except ImportError:
     ChatterboxTurboTTS = None
     TURBO_AVAILABLE = False
 
+# Multilingual model import (optional)
+try:
+    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+    MULTILINGUAL_AVAILABLE = True
+except ImportError:
+    ChatterboxMultilingualTTS = None
+    MULTILINGUAL_AVAILABLE = False
+
 # Import the singleton config_manager
-from config import config_manager
+from config import config_manager, get_gen_default_language
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +51,10 @@ MODEL_SELECTOR_MAP = {
     "chatterbox": "original",
     "original": "original",
     "resembleai/chatterbox": "original",
+    # Multilingual model selectors
+    "chatterbox-multilingual": "multilingual",
+    "multilingual": "multilingual",
+    "resembleai/chatterbox-multilingual": "multilingual",
     # Turbo model selectors
     "chatterbox-turbo": "turbo",
     "turbo": "turbo",
@@ -67,8 +82,9 @@ model_device: Optional[str] = (
 )
 
 # Track which model type is loaded
-loaded_model_type: Optional[str] = None  # "original" or "turbo"
-loaded_model_class_name: Optional[str] = None  # "ChatterboxTTS" or "ChatterboxTurboTTS"
+loaded_model_type: Optional[str] = None  # "original", "turbo", or "multilingual"
+loaded_model_class_name: Optional[str] = None  # Class name of the active model
+model_supported_languages: Optional[Dict[str, str]] = None  # Only populated for multilingual model
 
 
 def set_seed(seed_value: int):
@@ -156,6 +172,18 @@ def _get_model_class(selector: str) -> tuple:
         )
         return ChatterboxTurboTTS, "turbo"
 
+    if model_type == "multilingual":
+        if not MULTILINGUAL_AVAILABLE:
+            raise ImportError(
+                f"Model selector '{selector}' requires ChatterboxMultilingualTTS, "
+                f"but it is not available in the installed chatterbox package. "
+                f"Please update the chatterbox-tts package or select 'chatterbox' for the original model."
+            )
+        logger.info(
+            f"Model selector '{selector}' resolved to Multilingual model (ChatterboxMultilingualTTS)"
+        )
+        return ChatterboxMultilingualTTS, "multilingual"
+
     if model_type == "original":
         logger.info(
             f"Model selector '{selector}' resolved to Original model (ChatterboxTTS)"
@@ -191,7 +219,16 @@ def get_model_info() -> dict:
             TURBO_PARALINGUISTIC_TAGS if loaded_model_type == "turbo" else []
         ),
         "turbo_available_in_package": TURBO_AVAILABLE,
+        "supported_languages": model_supported_languages,
     }
+
+
+def get_supported_languages() -> Optional[Dict[str, str]]:
+    """
+    Returns a dictionary of supported languages for the currently loaded model,
+    if available (multilingual model only).
+    """
+    return model_supported_languages
 
 
 def load_model() -> bool:
@@ -205,7 +242,7 @@ def load_model() -> bool:
         bool: True if the model was loaded successfully, False otherwise.
     """
     global chatterbox_model, MODEL_LOADED, model_device
-    global loaded_model_type, loaded_model_class_name
+    global loaded_model_type, loaded_model_class_name, model_supported_languages
 
     if MODEL_LOADED:
         logger.info("TTS model is already loaded.")
@@ -294,6 +331,20 @@ def load_model() -> bool:
             # Store model metadata
             loaded_model_type = model_type
             loaded_model_class_name = model_class.__name__
+            if model_type == "multilingual":
+                try:
+                    model_supported_languages = (
+                        model_class.get_supported_languages()
+                        if hasattr(model_class, "get_supported_languages")
+                        else None
+                    )
+                except Exception as lang_err:
+                    logger.warning(
+                        f"Unable to retrieve supported languages for multilingual model: {lang_err}"
+                    )
+                    model_supported_languages = None
+            else:
+                model_supported_languages = None
 
             logger.info(f"Successfully loaded {model_class.__name__} on {model_device}")
             logger.info(f"Model sample rate: {chatterbox_model.sr} Hz")
@@ -334,6 +385,7 @@ def load_model() -> bool:
         )
         chatterbox_model = None
         MODEL_LOADED = False
+        model_supported_languages = None
         return False
 
 
@@ -344,6 +396,7 @@ def synthesize(
     exaggeration: float = 0.5,
     cfg_weight: float = 0.5,
     seed: int = 0,
+    language: Optional[str] = None,
 ) -> Tuple[Optional[torch.Tensor], Optional[int]]:
     """
     Synthesizes audio from text using the loaded TTS model.
@@ -382,14 +435,33 @@ def synthesize(
             f"exag={exaggeration}, cfg_weight={cfg_weight}, seed_applied_globally_if_nonzero={seed}"
         )
 
-        # Call the core model's generate method
-        wav_tensor = chatterbox_model.generate(
-            text=text,
-            audio_prompt_path=audio_prompt_path,
-            temperature=temperature,
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight,
-        )
+        # Resolve language (used only for multilingual model)
+        resolved_language = language or get_gen_default_language()
+        if loaded_model_type == "multilingual":
+            if not resolved_language:
+                resolved_language = get_gen_default_language()
+            logger.info(f"Using multilingual language_id='{resolved_language}'")
+            wav_tensor = chatterbox_model.generate(
+                text=text,
+                language_id=resolved_language,
+                audio_prompt_path=audio_prompt_path,
+                temperature=temperature,
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+            )
+        else:
+            if language and language.lower() != "en":
+                logger.debug(
+                    "Language parameter provided but current model does not support multilingual tokens."
+                )
+            # Call the core model's generate method
+            wav_tensor = chatterbox_model.generate(
+                text=text,
+                audio_prompt_path=audio_prompt_path,
+                temperature=temperature,
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+            )
 
         # The ChatterboxTTS.generate method already returns a CPU tensor.
         return wav_tensor, chatterbox_model.sr
@@ -408,7 +480,7 @@ def reload_model() -> bool:
     Returns:
         bool: True if the new model loaded successfully, False otherwise.
     """
-    global chatterbox_model, MODEL_LOADED, model_device, loaded_model_type, loaded_model_class_name
+    global chatterbox_model, MODEL_LOADED, model_device, loaded_model_type, loaded_model_class_name, model_supported_languages
 
     logger.info("Initiating model hot-swap/reload sequence...")
 
@@ -422,6 +494,7 @@ def reload_model() -> bool:
     MODEL_LOADED = False
     loaded_model_type = None
     loaded_model_class_name = None
+    model_supported_languages = None
 
     # 3. Force Python Garbage Collection
     gc.collect()

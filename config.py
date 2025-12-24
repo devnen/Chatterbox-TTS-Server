@@ -84,18 +84,19 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "max_reference_duration_sec": 30,  # Maximum duration for reference audio files.
         "save_to_disk": False,  # If true, save generated audio files to disk in outputs folder.
     },
-    "ui_state": {  # Stores user interface preferences and last-used values.
-        "last_text": "",  # Last text entered by the user.
-        "last_voice_mode": "predefined",  # Last selected voice mode ('predefined' or 'clone').
-        "last_predefined_voice": None,  # Filename of the last used predefined voice.
-        "last_reference_file": None,  # Filename of the last used reference audio file.
-        "last_seed": 0,  # Last used generation seed.
-        "last_chunk_size": 120,  # Last used chunk size for text splitting in UI.
-        "last_split_text_enabled": True,  # Whether text splitting was last enabled in UI.
-        "hide_chunk_warning": False,  # Flag to hide the chunking warning modal.
-        "hide_generation_warning": False,  # Flag to hide the general generation quality notice modal.
-        "theme": "dark",  # Default UI theme ('dark' or 'light').
-    },
+        "ui_state": {  # Stores user interface preferences and last-used values.
+            "last_text": "",  # Last text entered by the user.
+            "last_voice_mode": "predefined",  # Last selected voice mode ('predefined' or 'clone').
+            "last_predefined_voice": None,  # Filename of the last used predefined voice.
+            "last_reference_file": None,  # Filename of the last used reference audio file.
+            "last_seed": 0,  # Last used generation seed.
+            "last_chunk_size": 120,  # Last used chunk size for text splitting in UI.
+            "last_split_text_enabled": True,  # Whether text splitting was last enabled in UI.
+            "hide_chunk_warning": False,  # Flag to hide the chunking warning modal.
+            "hide_generation_warning": False,  # Flag to hide the general generation quality notice modal.
+            "theme": "dark",  # Default UI theme ('dark' or 'light').
+            "last_language": "en",  # Last selected language code in the UI.
+        },
     "ui": {  # General UI display settings.
         "title": "Chatterbox TTS Server",  # Title displayed in the web UI.
         "show_language_select": True,  # Whether to show language selection in the UI.
