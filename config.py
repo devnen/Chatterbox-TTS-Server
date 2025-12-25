@@ -47,6 +47,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         ),  # Path to the server log file.
         "log_file_max_size_mb": 10,  # Maximum size of a single log file before rotation.
         "log_file_backup_count": 5,  # Number of backup log files to keep.
+        "ssl_certfile": None,
+        "ssl_keyfile": None
     },
     "model": {  # Added section for model source configuration
         "repo_id": "chatterbox-turbo",  # UPDATED: Default to Turbo model
@@ -213,7 +215,7 @@ class YamlConfigManager:
 
         # Convert relevant string paths to Path objects.
         path_key_map_for_conversion = {
-            "server": ["log_file_path"],
+            "server": ["log_file_path", "ssl_certfile", "ssl_keyfile"],
             "tts_engine": ["predefined_voices_path", "reference_audio_path"],
             "paths": ["model_cache", "output"],
         }
@@ -276,7 +278,7 @@ class YamlConfigManager:
         """
         config_copy_for_saving = deepcopy(config_dict)
         path_key_map_for_conversion = {
-            "server": ["log_file_path"],
+            "server": ["log_file_path", "ssl_certfile", "ssl_keyfile"],
             "tts_engine": ["predefined_voices_path", "reference_audio_path"],
             "paths": ["model_cache", "output"],
         }
@@ -720,6 +722,13 @@ def get_port() -> int:
     """Returns the server port number."""
     return config_manager.get_int(
         "server.port", _get_default_from_structure("server.port")
+    )
+
+
+def get_ssl() -> (Path, Path):
+    return (
+        config_manager.get_path("server.ssl_certfile", _get_default_from_structure("server.ssl_certfile")),
+        config_manager.get_path("server.ssl_keyfile", _get_default_from_structure("server.ssl_keyfile")),
     )
 
 
