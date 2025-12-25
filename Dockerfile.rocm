@@ -1,4 +1,4 @@
-FROM rocm/dev-ubuntu-22.04:latest
+FROM docker.io/rocm/dev-ubuntu-22.04:latest
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1

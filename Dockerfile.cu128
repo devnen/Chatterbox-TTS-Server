@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
+FROM docker.io/nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
 ARG RUNTIME=nvidia
 
