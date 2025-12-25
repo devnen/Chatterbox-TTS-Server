@@ -43,6 +43,7 @@ from config import (
     config_manager,
     get_host,
     get_port,
+    get_ssl,
     get_log_file_path,
     get_output_path,
     get_reference_audio_path,
@@ -1335,6 +1336,7 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
 if __name__ == "__main__":
     server_host = get_host()
     server_port = get_port()
+    ssl_certfile, ssl_keyfile = get_ssl()
 
     logger.info(f"Starting TTS Server directly on http://{server_host}:{server_port}")
     logger.info(
@@ -1351,4 +1353,6 @@ if __name__ == "__main__":
         log_level="info",
         workers=1,
         reload=False,
+        ssl_certfile=ssl_certfile,
+        ssl_keyfile=ssl_keyfile,
     )
