@@ -399,6 +399,53 @@ def synthesize(
         return None, None
 
 
+def unload_model() -> bool:
+    """
+    Unloads the current model and releases all GPU memory.
+    Does NOT reload the model - use reload_model() for that.
+
+    Returns:
+        bool: True if the model was unloaded successfully, False otherwise.
+    """
+    global chatterbox_model, MODEL_LOADED, model_device, loaded_model_type, loaded_model_class_name
+
+    logger.info("Initiating model unload sequence...")
+
+    # 1. Unload existing model
+    if chatterbox_model is not None:
+        logger.info("Unloading TTS model from memory...")
+        del chatterbox_model
+        chatterbox_model = None
+
+    # 2. Reset state flags
+    MODEL_LOADED = False
+    model_device = None
+    loaded_model_type = None
+    loaded_model_class_name = None
+
+    # 3. Force Python Garbage Collection
+    gc.collect()
+    logger.info("Python garbage collection completed.")
+
+    # 4. Clear GPU Cache (CUDA)
+    if torch.cuda.is_available():
+        logger.info("Clearing CUDA cache...")
+        torch.cuda.empty_cache()
+
+    # 5. Clear GPU Cache (MPS - Apple Silicon)
+    if torch.backends.mps.is_available():
+        try:
+            torch.mps.empty_cache()
+            logger.info("Cleared MPS cache.")
+        except AttributeError:
+            logger.debug(
+                "torch.mps.empty_cache() not available in this PyTorch version."
+            )
+
+    logger.info("Model unloaded and GPU memory released.")
+    return True
+
+
 def reload_model() -> bool:
     """
     Unloads the current model, clears GPU memory, and reloads the model
