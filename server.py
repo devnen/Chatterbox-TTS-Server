@@ -1242,12 +1242,32 @@ async def openai_speech_endpoint(
             logger.info("LLM preprocessing enabled, extracting TTS parameters...")
             extracted = await preprocess_speech_input(request.input_)
 
+            # Determine voice mode by checking both paths (same logic as standard behavior)
+            predefined_voices_path = get_predefined_voices_path(ensure_absolute=True)
+            reference_audio_path = get_reference_audio_path(ensure_absolute=True)
+            voice_path_predefined = predefined_voices_path / request.voice
+            voice_path_reference = reference_audio_path / request.voice
+
+            if voice_path_predefined.is_file():
+                voice_mode = "predefined"
+                predefined_voice_id = request.voice
+                reference_audio_filename = None
+            elif voice_path_reference.is_file():
+                voice_mode = "clone"
+                predefined_voice_id = None
+                reference_audio_filename = request.voice
+            else:
+                raise HTTPException(
+                    status_code=404, detail=f"Voice file '{request.voice}' not found."
+                )
+
             # Build CustomTTSRequest from extracted params
             # Override with OpenAI request params (voice, speed, seed, output_format)
             custom_request = CustomTTSRequest(
                 text=extracted.text,
-                voice_mode="predefined",  # OpenAI API uses voice filename
-                predefined_voice_id=request.voice,
+                voice_mode=voice_mode,
+                predefined_voice_id=predefined_voice_id,
+                reference_audio_filename=reference_audio_filename,
                 output_format=request.response_format,
                 speed_factor=request.speed,
                 seed=request.seed,
