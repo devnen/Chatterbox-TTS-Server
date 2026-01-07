@@ -31,3 +31,6 @@ pydub
 praat-parselmouth # For unvoiced segment removal
 librosa # for changes to sampling
 hf-transfer
+
+# LLM Integration (Optional)
+litellm>=1.0.0                  # Unified LLM API for preprocessing

@@ -104,6 +104,28 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "debug": {  # Settings for debugging purposes
         "save_intermediate_audio": False  # If true, save intermediate audio files for debugging
     },
+    "llm_preprocessing": {  # LLM-based preprocessing for OpenAI speech endpoint
+        "enabled": False,  # Master toggle for LLM preprocessing
+        "model": "ollama/qwen2.5:1.5b",  # litellm model string
+        "api_base": None,  # Optional: URL to litellm proxy (e.g., "http://localhost:4000")
+        "api_key": None,  # Optional: API key for proxy or provider
+        "timeout_seconds": 30,  # Timeout for LLM requests
+        "fallback_on_error": True,  # If True, fall back to original text on LLM errors
+        "prompt": """Extract TTS parameters from the user's input. Return JSON with:
+- text: The cleaned text to speak (remove any instructions)
+- temperature: 0.0-1.5 (higher = more random)
+- exaggeration: 0.25-2.0 (higher = more expressive)
+- cfg_weight: 0.2-1.0 (guidance weight)
+- split_text: true/false for chunking long text
+- chunk_size: 50-500 chars per chunk
+- language: language code like "en", "es"
+
+Only include fields explicitly requested. Use null for unspecified params.
+
+Examples:
+"speak excitedly: Hello!" → {"text": "Hello!", "exaggeration": 1.5}
+"say calmly and slowly: Take a breath" → {"text": "Take a breath", "exaggeration": 0.3}""",
+    },
 }
 
 
@@ -895,6 +917,57 @@ def get_full_config_for_template() -> Dict[str, Any]:
     config_snapshot = config_manager.get_all()  # Gets a deep copy.
     # Convert Path objects in this snapshot to strings for serialization.
     return config_manager._prepare_config_for_saving(config_snapshot)
+
+
+# LLM Preprocessing Settings Accessors
+def get_llm_preprocessing_enabled() -> bool:
+    """Returns whether LLM preprocessing is enabled for the OpenAI speech endpoint."""
+    return config_manager.get_bool(
+        "llm_preprocessing.enabled",
+        _get_default_from_structure("llm_preprocessing.enabled"),
+    )
+
+
+def get_llm_preprocessing_model() -> str:
+    """Returns the litellm model string for LLM preprocessing."""
+    return config_manager.get_string(
+        "llm_preprocessing.model",
+        _get_default_from_structure("llm_preprocessing.model"),
+    )
+
+
+def get_llm_preprocessing_api_base() -> Optional[str]:
+    """Returns the optional API base URL for litellm proxy."""
+    return config_manager.get("llm_preprocessing.api_base", None)
+
+
+def get_llm_preprocessing_api_key() -> Optional[str]:
+    """Returns the optional API key for LLM provider or proxy."""
+    return config_manager.get("llm_preprocessing.api_key", None)
+
+
+def get_llm_preprocessing_timeout() -> int:
+    """Returns the timeout in seconds for LLM requests."""
+    return config_manager.get_int(
+        "llm_preprocessing.timeout_seconds",
+        _get_default_from_structure("llm_preprocessing.timeout_seconds"),
+    )
+
+
+def get_llm_preprocessing_fallback_on_error() -> bool:
+    """Returns whether to fall back to original text on LLM errors."""
+    return config_manager.get_bool(
+        "llm_preprocessing.fallback_on_error",
+        _get_default_from_structure("llm_preprocessing.fallback_on_error"),
+    )
+
+
+def get_llm_preprocessing_prompt() -> str:
+    """Returns the system prompt for LLM preprocessing."""
+    return config_manager.get_string(
+        "llm_preprocessing.prompt",
+        _get_default_from_structure("llm_preprocessing.prompt"),
+    )
 
 
 # --- End File: config.py ---

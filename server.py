@@ -57,6 +57,8 @@ from config import (
     get_audio_sample_rate,
     get_full_config_for_template,
     get_audio_output_format,
+    get_llm_preprocessing_enabled,
+    get_llm_preprocessing_fallback_on_error,
 )
 
 import engine  # TTS Engine interface
@@ -66,6 +68,7 @@ from models import (  # Pydantic models
     UpdateStatusResponse,
 )
 import utils  # Utility functions
+from llm_preprocessor import preprocess_speech_input, TTSParamsExtraction
 
 from pydantic import BaseModel, Field
 
@@ -1220,7 +1223,62 @@ async def custom_tts_endpoint(
 
 
 @app.post("/v1/audio/speech", tags=["OpenAI Compatible"])
-async def openai_speech_endpoint(request: OpenAISpeechRequest):
+async def openai_speech_endpoint(
+    request: OpenAISpeechRequest, background_tasks: BackgroundTasks
+):
+    """
+    OpenAI-compatible speech endpoint with optional LLM preprocessing.
+
+    When LLM preprocessing is enabled, natural language instructions in the input
+    are parsed to extract TTS parameters (e.g., "speak excitedly: Hello!" extracts
+    exaggeration=1.5 and text="Hello!"). The request is then delegated to the
+    custom_tts_endpoint for full parameter support.
+
+    When disabled, behaves as a standard OpenAI-compatible endpoint.
+    """
+    # --- LLM Preprocessing Path ---
+    if get_llm_preprocessing_enabled():
+        try:
+            logger.info("LLM preprocessing enabled, extracting TTS parameters...")
+            extracted = await preprocess_speech_input(request.input_)
+
+            # Build CustomTTSRequest from extracted params
+            # Override with OpenAI request params (voice, speed, seed, output_format)
+            custom_request = CustomTTSRequest(
+                text=extracted.text,
+                voice_mode="predefined",  # OpenAI API uses voice filename
+                predefined_voice_id=request.voice,
+                output_format=request.response_format,
+                speed_factor=request.speed,
+                seed=request.seed,
+                # Use extracted params if present, otherwise None (will use defaults)
+                temperature=extracted.temperature,
+                exaggeration=extracted.exaggeration,
+                cfg_weight=extracted.cfg_weight,
+                split_text=extracted.split_text,
+                chunk_size=extracted.chunk_size,
+                language=extracted.language,
+            )
+
+            logger.info(
+                f"Delegating to custom_tts_endpoint with extracted params: "
+                f"text='{custom_request.text[:50]}...', temp={custom_request.temperature}, "
+                f"exag={custom_request.exaggeration}, cfg={custom_request.cfg_weight}"
+            )
+
+            # Delegate to custom_tts_endpoint for full processing
+            return await custom_tts_endpoint(custom_request, background_tasks)
+
+        except Exception as e:
+            logger.error(f"LLM preprocessing failed: {e}", exc_info=True)
+            if not get_llm_preprocessing_fallback_on_error():
+                raise HTTPException(
+                    status_code=500, detail=f"LLM preprocessing failed: {e}"
+                )
+            logger.warning("Falling back to standard OpenAI endpoint behavior")
+            # Fall through to standard behavior below
+
+    # --- Standard OpenAI Endpoint Behavior ---
     # Determine the audio prompt path based on the voice parameter
     predefined_voices_path = get_predefined_voices_path(ensure_absolute=True)
     reference_audio_path = get_reference_audio_path(ensure_absolute=True)
