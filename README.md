@@ -64,6 +64,14 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
   - `--upgrade` to update code + dependencies.
   - `--reinstall` for a clean reinstall when environments get messy.
 
+### 🧠 LLM-based Preprocessing (OpenAI Endpoint)
+
+- Added **LLM-based preprocessing** for the OpenAI-compatible `/v1/audio/speech` endpoint.
+- Send natural language instructions like `"speak excitedly: Hello!"` and the LLM extracts TTS parameters automatically.
+- Uses **[litellm](https://docs.litellm.ai/)** for unified access to 100+ LLM providers (Ollama, OpenAI, Anthropic, etc.).
+- Extracts parameters: `temperature`, `exaggeration`, `cfg_weight`, `split_text`, `chunk_size`, `language`.
+- Configurable prompt, timeout, and fallback behavior via `config.yaml`.
+
 ---
 
 ## 🗣️ Overview: Enhanced Chatterbox TTS Generation
@@ -154,6 +162,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 *   **Advanced Generation Features:**
     *   🔁 **Hot-Swappable Engines:** Switch between Original Chatterbox and Chatterbox‑Turbo directly in the Web UI.
     *   🎭 **Paralinguistic Tags (Turbo):** Native support for `[laugh]`, `[cough]`, `[chuckle]` and other expressive tags.
+    *   🧠 **LLM Preprocessing (OpenAI Endpoint):** Send natural language instructions through the OpenAI-compatible endpoint. An LLM extracts TTS parameters from instructions like "speak excitedly" or "say slowly and calmly."
     *   📚 **Large Text Handling:** Intelligently splits long plain text inputs into chunks based on sentences, generates audio for each, and concatenates the results seamlessly. Configurable via `split_text` and `chunk_size`.
     *   📖 **Audiobook Creation:** Perfect for generating complete audiobooks from full-length texts with consistent voice quality and automatic chapter handling.
     *   🎤 **Predefined Voices:** Select from curated synthetic voices in the `./voices` directory.
@@ -573,6 +582,7 @@ The server relies exclusively on `config.yaml` for runtime configuration.
 *   `ui_state`: Stores the last used text, voice mode, file selections, etc., for UI persistence.
 *   `ui`: `title`, `show_language_select`, `max_predefined_voices_in_dropdown`.
 *   `debug`: `save_intermediate_audio`.
+*   `llm_preprocessing`: LLM preprocessing settings (`enabled`, `model`, `api_base`, `api_key`, `timeout_seconds`, `fallback_on_error`, `prompt`).
 
 ⭐ **Remember:** Changes made to `server`, `model`, `tts_engine`, or `paths` sections in `config.yaml` (or via the UI's Server Configuration section) **require a server restart** to take effect. Changes to `generation_defaults` or `ui_state` are applied dynamically or on the next page load.
 
@@ -850,6 +860,113 @@ One moment… [cough] sorry about that. Let's get this fixed.
 ```
 
 Turbo supports native tags like `[laugh]`, `[cough]`, and `[chuckle]` for more realistic, expressive speech. These tags are ignored when using Original Chatterbox.
+
+### 🧠 LLM Preprocessing (OpenAI Endpoint)
+
+The LLM preprocessing feature allows you to send natural language instructions through the OpenAI-compatible `/v1/audio/speech` endpoint. Instead of manually specifying TTS parameters, simply describe how you want the text spoken and an LLM will extract the appropriate settings.
+
+#### How It Works
+
+When enabled, the server sends your input text to a configured LLM, which extracts:
+- **text**: The cleaned text to speak (instructions removed)
+- **temperature**: Controls randomness (0.0-1.5)
+- **exaggeration**: Controls expressiveness (0.25-2.0)
+- **cfg_weight**: Classifier-Free Guidance weight (0.2-1.0)
+- **split_text**: Whether to chunk long text
+- **chunk_size**: Target characters per chunk (50-500)
+- **language**: Language code (e.g., "en", "es")
+
+The extracted parameters are then used to generate speech with the appropriate settings.
+
+#### Example Instructions
+
+| Input | Extracted Parameters |
+|-------|---------------------|
+| `"speak excitedly: Hello world!"` | text="Hello world!", exaggeration=1.5 |
+| `"say calmly and slowly: Take a breath"` | text="Take a breath", exaggeration=0.3 |
+| `"whisper this in Spanish: Buenos días"` | text="Buenos días", exaggeration=0.3, language="es" |
+| `"read this enthusiastically with high energy: Welcome everyone!"` | text="Welcome everyone!", exaggeration=1.8, temperature=0.8 |
+
+#### Configuration
+
+Enable and configure LLM preprocessing in `config.yaml`:
+
+```yaml
+llm_preprocessing:
+  enabled: true                          # Master toggle
+  model: "ollama/qwen2.5:1.5b"          # litellm model string
+  api_base: null                         # Optional: URL to litellm proxy
+  api_key: null                          # Optional: API key for provider
+  timeout_seconds: 30                    # Timeout for LLM requests
+  fallback_on_error: true               # Fall back to original text on errors
+  prompt: |                              # System prompt for extraction
+    Extract TTS parameters from the user's input...
+```
+
+#### LLM Provider Setup
+
+The feature uses [litellm](https://docs.litellm.ai/) which supports 100+ LLM providers. Common configurations:
+
+**Ollama (Local, Recommended for Privacy):**
+```yaml
+llm_preprocessing:
+  enabled: true
+  model: "ollama/qwen2.5:1.5b"    # Or llama3.2:1b, phi3:mini, etc.
+  api_base: null                   # Uses default http://localhost:11434
+```
+
+**OpenAI:**
+```yaml
+llm_preprocessing:
+  enabled: true
+  model: "gpt-4o-mini"
+  api_key: "sk-..."               # Or set OPENAI_API_KEY env var
+```
+
+**Anthropic:**
+```yaml
+llm_preprocessing:
+  enabled: true
+  model: "claude-3-haiku-20240307"
+  api_key: "sk-ant-..."           # Or set ANTHROPIC_API_KEY env var
+```
+
+**LiteLLM Proxy:**
+```yaml
+llm_preprocessing:
+  enabled: true
+  model: "openai/your-model-alias"   # Use openai/ prefix + model alias from proxy
+  api_base: "http://localhost:4000"
+  api_key: "not-needed"              # Required placeholder (even if proxy has no auth)
+```
+
+> **Note:** When using a LiteLLM proxy:
+> - Use the `openai/` prefix (e.g., `openai/gpt-4o-mini`) because the proxy exposes an OpenAI-compatible API
+> - The model name after the prefix should match your proxy's model alias
+> - You must provide an `api_key` value (use `"not-needed"` for unauthenticated proxies)
+
+#### API Usage Example
+
+```bash
+# With LLM preprocessing enabled, natural language instructions work:
+curl -X POST "http://localhost:8004/v1/audio/speech" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "speak with excitement and energy: Welcome to our show!",
+    "voice": "female_voice.wav"
+  }' \
+  --output excited_welcome.wav
+
+# The LLM extracts: text="Welcome to our show!", exaggeration=1.5+
+# Then generates speech with those parameters
+```
+
+#### Error Handling
+
+- **fallback_on_error: true** (default): If the LLM fails, the original text is used as-is with default TTS parameters.
+- **fallback_on_error: false**: LLM errors return HTTP 500 with error details.
+
+Errors are logged with full details for debugging. Check server logs if preprocessing isn't working as expected.
 
 ### API Endpoints (`/docs` for interactive details)
 

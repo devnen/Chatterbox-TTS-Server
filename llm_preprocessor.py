@@ -84,17 +84,22 @@ async def preprocess_speech_input(input_text: str) -> TTSParamsExtraction:
     logger.debug(f"Input text: {input_text[:100]}...")
 
     try:
-        response = await acompletion(
-            model=model,
-            messages=[
+        # Build kwargs conditionally to avoid passing None values
+        kwargs = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": input_text},
             ],
-            response_format=TTSParamsExtraction,
-            api_base=api_base,
-            api_key=api_key,
-            timeout=timeout,
-        )
+            "response_format": TTSParamsExtraction,
+            "timeout": timeout,
+        }
+        if api_base:
+            kwargs["api_base"] = api_base
+        if api_key:
+            kwargs["api_key"] = api_key
+
+        response = await acompletion(**kwargs)
 
         # Parse the response content into our Pydantic model
         content = response.choices[0].message.content
