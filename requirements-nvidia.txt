@@ -38,6 +38,9 @@ inflect
 tqdm
 hf_transfer                     # Speed up file transfers
 
+# LLM Integration (Optional)
+litellm>=1.0.0                  # Unified LLM API for preprocessing
+
 # Audio Post-processing
 pydub
 audiotsm
