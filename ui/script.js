@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     let currentModelInfo = null;
     let selectedModelSelector = 'chatterbox-turbo';
     let modelChangesPending = false;
-    let lastOriginalLanguage = 'en'; // Remember language selection for Original model
+    let lastMultilingualLanguage = 'en'; // Remember language selection for Multilingual model
 
     let hideChunkWarning = false;
     let hideGenerationWarning = false;
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const DEBOUNCE_DELAY_MS = 750;
 
     // Language options by model type
-    const LANGUAGES_ORIGINAL = [
+    const LANGUAGES_MULTILINGUAL = [
         { code: 'ar', name: 'Arabic (العربية)' },
         { code: 'zh', name: 'Chinese (中文)' },
         { code: 'da', name: 'Danish (Dansk)' },
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         { code: 'sv', name: 'Swedish (Svenska)' },
         { code: 'tr', name: 'Turkish (Türkçe)' }
     ];
-    const LANGUAGES_TURBO = [
+    const LANGUAGES_ENGLISH_ONLY = [
         { code: 'en', name: 'English' }
     ];
 
@@ -313,10 +313,16 @@ document.addEventListener('DOMContentLoaded', async function () {
             modelIndicator.classList.remove('hidden');
 
             // Use simplified modifier classes
-            modelBadge.className = modelInfo.type === 'turbo'
-                ? 'model-badge turbo'
-                : 'model-badge original';
-            modelBadgeText.textContent = modelInfo.type === 'turbo' ? '⚡ Turbo' : 'Original';
+            if (modelInfo.type === 'turbo') {
+                modelBadge.className = 'model-badge turbo';
+                modelBadgeText.textContent = '⚡ Turbo';
+            } else if (modelInfo.type === 'multilingual') {
+                modelBadge.className = 'model-badge multilingual';
+                modelBadgeText.textContent = '🌍 Multilingual';
+            } else {
+                modelBadge.className = 'model-badge original';
+                modelBadgeText.textContent = 'Original';
+            }
         }
 
         // Update model status indicator
@@ -334,7 +340,12 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // Update model selector dropdown to match loaded model
         if (modelSelect && !modelChangesPending) {
-            const selectorValue = modelInfo.type === 'turbo' ? 'chatterbox-turbo' : 'chatterbox';
+            let selectorValue = 'chatterbox';
+            if (modelInfo.type === 'turbo') {
+                selectorValue = 'chatterbox-turbo';
+            } else if (modelInfo.type === 'multilingual') {
+                selectorValue = 'chatterbox-multilingual';
+            }
             modelSelect.value = selectorValue;
             selectedModelSelector = selectorValue;
         }
@@ -371,14 +382,23 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     function updateLanguageOptions(modelType) {
-        if (!languageSelect) return;
+        if (!languageSelect || !languageSelectContainer) return;
 
         const currentValue = languageSelect.value;
-        const languages = modelType === 'turbo' ? LANGUAGES_TURBO : LANGUAGES_ORIGINAL;
+        const isMultilingual = modelType === 'multilingual';
+        const languages = isMultilingual ? LANGUAGES_MULTILINGUAL : LANGUAGES_ENGLISH_ONLY;
 
-        // Save current selection before switching to Turbo (if it's a valid Original language)
-        if (modelType === 'turbo' && currentValue && currentValue !== 'en') {
-            lastOriginalLanguage = currentValue;
+        // Save current selection before switching away from Multilingual
+        if (!isMultilingual && currentValue && currentValue !== 'en') {
+            lastMultilingualLanguage = currentValue;
+        }
+
+        // Show/hide language selector based on model type
+        // Only show for multilingual model (or if config says to show it)
+        if (isMultilingual) {
+            languageSelectContainer.classList.remove('hidden');
+        } else {
+            languageSelectContainer.classList.add('hidden');
         }
 
         // Clear existing options
@@ -393,11 +413,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         });
 
         // Restore appropriate selection
-        if (modelType === 'turbo') {
-            languageSelect.value = 'en';
+        if (isMultilingual) {
+            // Restore last Multilingual language selection
+            languageSelect.value = lastMultilingualLanguage;
         } else {
-            // Restore last Original language selection
-            languageSelect.value = lastOriginalLanguage;
+            languageSelect.value = 'en';
         }
     }
 
@@ -435,7 +455,12 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (!modelSelect) return;
 
         const newSelector = modelSelect.value;
-        const currentSelector = currentModelInfo?.type === 'turbo' ? 'chatterbox-turbo' : 'chatterbox';
+        let currentSelector = 'chatterbox';
+        if (currentModelInfo?.type === 'turbo') {
+            currentSelector = 'chatterbox-turbo';
+        } else if (currentModelInfo?.type === 'multilingual') {
+            currentSelector = 'chatterbox-multilingual';
+        }
 
         if (newSelector !== currentSelector) {
             modelChangesPending = true;
