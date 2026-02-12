@@ -26,6 +26,8 @@ Options:
     --nvidia            Install NVIDIA CUDA 12.1 version (skip menu)
     --nvidia-cu128      Install NVIDIA CUDA 12.8 version (skip menu)
     --rocm              Install AMD ROCm version (skip menu)
+    --portable          Use portable Python environment (Windows, skip prompt)
+    --no-portable       Use standard virtual environment (Windows, skip prompt)
     --verbose, -v       Show detailed installation output
     --help, -h          Show this help message
 
@@ -35,16 +37,20 @@ Requirements:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import platform
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import threading
 import time
+import urllib.request
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -52,10 +58,30 @@ from pathlib import Path
 # CONFIGURATION
 # ============================================================================
 
+# TESTING FLAG: Set to True to simulate Python 3.11+ on Windows
+# (forces embedded Python fallback even if actual Python version is <3.11)
+# This is useful for testing the embedded Python path without installing Python 3.11+
+TEST_EMBEDDED_PYTHON_PATH = False
+
 # Virtual environment settings
 VENV_FOLDER = "venv"
 SERVER_SCRIPT = "server.py"
 CONFIG_FILE = "config.yaml"
+
+# Embedded Python settings (Windows fallback for Python 3.11+)
+EMBEDDED_PYTHON_DIR = "python_embedded"
+EMBEDDED_PYTHON_VERSION = "3.10.11"
+EMBEDDED_PYTHON_URL = (
+    f"https://www.python.org/ftp/python/{EMBEDDED_PYTHON_VERSION}/"
+    f"python-{EMBEDDED_PYTHON_VERSION}-embed-amd64.zip"
+)
+GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
+
+# SHA-256 hash of the embeddable zip for integrity verification.
+# Set to "" to skip verification (not recommended for production).
+# To compute: download the file from EMBEDDED_PYTHON_URL, then run:
+#   python -c "import hashlib; print(hashlib.sha256(open('python-3.10.11-embed-amd64.zip','rb').read()).hexdigest())"
+EMBEDDED_PYTHON_SHA256 = ""
 
 # Installation type identifiers
 INSTALL_CPU = "cpu"
@@ -83,7 +109,8 @@ INSTALL_NAMES = {
 CHATTERBOX_REPO = "git+https://github.com/devnen/chatterbox-v2.git@master"
 
 # Timeout settings (seconds)
-SERVER_STARTUP_TIMEOUT = 180  # Model loading can be slow
+# First run downloads large model files (~2GB). Subsequent starts are much faster.
+SERVER_STARTUP_TIMEOUT = 1800
 PORT_CHECK_INTERVAL = 0.5
 
 # Global verbose mode flag (set from args)
@@ -522,31 +549,38 @@ def clear_install_complete(venv_dir):
         print_warning(f"Could not clear install marker: {e}")
 
 
-def remove_venv(venv_dir):
+def robust_rmtree(path):
     """
-    Remove virtual environment with retry for locked files (Windows).
+    Remove a directory tree with Windows-hardened error handling.
+
+    Uses an onerror callback to strip read-only attributes (common on
+    extracted zip contents), retries on transient permission errors
+    (antivirus, Explorer indexing), and falls back to renaming the
+    directory aside if deletion fails entirely.
 
     Args:
-        venv_dir: Path to virtual environment directory
+        path: Path to directory to remove
 
     Returns:
-        True on success, False on failure
+        True if directory is gone (deleted or renamed aside), False if stuck
     """
-    if not venv_dir.exists():
+    path = Path(path)
+    if not path.exists():
         return True
 
-    print_substep("Removing existing virtual environment...")
+    def handle_remove_readonly(func, fpath, exc):
+        """Clear read-only flag and retry the failed operation."""
+        os.chmod(fpath, stat.S_IWRITE)
+        func(fpath)
 
     max_retries = 3
     retry_delay = 2
 
     for attempt in range(max_retries):
         try:
-            shutil.rmtree(venv_dir)
-            print_substep("Virtual environment removed", "done")
+            shutil.rmtree(path, onerror=handle_remove_readonly)
             return True
-
-        except PermissionError as e:
+        except PermissionError:
             if attempt < max_retries - 1:
                 print_substep(
                     f"Files locked, retrying in {retry_delay}s... "
@@ -554,22 +588,611 @@ def remove_venv(venv_dir):
                     "warning",
                 )
                 time.sleep(retry_delay)
-            else:
-                print_error(f"Could not remove venv: {e}")
-                print_substep(
-                    "Try closing any terminals/editors using this folder", "info"
-                )
-                if is_windows():
-                    print_substep("Or run: rmdir /s /q venv", "info")
-                else:
-                    print_substep("Or run: rm -rf venv", "info")
-                return False
+        except Exception:
+            break  # Non-permission error, skip to rename fallback
 
-        except Exception as e:
-            print_error(f"Failed to remove venv: {e}")
-            return False
+    # Fallback: rename aside so we can proceed even if deletion fails
+    try:
+        aside_name = f"{path.name}.old.{int(time.time())}"
+        aside_path = path.parent / aside_name
+        path.rename(aside_path)
+        print_substep(
+            f"Could not delete folder; renamed to {aside_name}",
+            "warning",
+        )
+        print_substep("You can safely delete that folder later.", "info")
+        return True
+    except Exception:
+        pass
 
     return False
+
+
+def remove_venv(venv_dir):
+    """
+    Remove an environment directory (venv or embedded) with robust error handling.
+
+    Args:
+        venv_dir: Path to environment directory
+
+    Returns:
+        True on success, False on failure
+    """
+    if not venv_dir.exists():
+        return True
+
+    print_substep(f"Removing existing environment ({venv_dir.name})...")
+
+    if robust_rmtree(venv_dir):
+        print_substep("Environment removed", "done")
+        return True
+
+    print_error(f"Could not remove: {venv_dir}")
+    print_substep(
+        "Try closing any terminals, editors, or antivirus scanning this folder",
+        "info",
+    )
+    if is_windows():
+        print_substep(f'Or run: rmdir /s /q "{venv_dir.name}"', "info")
+    else:
+        print_substep(f'Or run: rm -rf "{venv_dir.name}"', "info")
+    return False
+
+
+# ============================================================================
+# EMBEDDED PYTHON (WINDOWS FALLBACK)
+# ============================================================================
+
+
+def get_embedded_python_paths(root_dir):
+    """
+    Get paths for the embedded Python environment (Windows only).
+
+    Args:
+        root_dir: Root directory of the project
+
+    Returns:
+        Tuple of (embedded_dir, embedded_python, embedded_pip) as Path objects
+    """
+    embedded_dir = root_dir / EMBEDDED_PYTHON_DIR
+    embedded_python = embedded_dir / "python.exe"
+    embedded_pip = embedded_dir / "Scripts" / "pip.exe"
+    return embedded_dir, embedded_python, embedded_pip
+
+
+def is_embedded_python_available(root_dir):
+    """
+    Check if embedded Python is already set up and functional.
+
+    Args:
+        root_dir: Root directory of the project
+
+    Returns:
+        True if embedded Python is ready to use
+    """
+    embedded_dir, embedded_python, embedded_pip = get_embedded_python_paths(root_dir)
+
+    if not embedded_python.exists() or not embedded_pip.exists():
+        return False
+
+    try:
+        result = subprocess.run(
+            [str(embedded_python), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def download_file(url, dest_path, description="Downloading"):
+    """
+    Download a file from a URL with progress indication.
+
+    Uses urlopen with an explicit per-operation timeout to prevent
+    indefinite hanging on flaky networks or corporate proxies.
+    Downloads to a temporary .part file first, then atomically moves
+    to dest_path so interrupted downloads never leave a valid-looking
+    but truncated file at the final path.
+
+    Args:
+        url: URL to download from
+        dest_path: Local path to save the file
+        description: Description shown during download
+
+    Returns:
+        True on success, False on failure
+    """
+    print_substep(f"{description}...")
+
+    dest_path = Path(dest_path)
+    part_path = dest_path.parent / (dest_path.name + ".part")
+
+    try:
+        response = urllib.request.urlopen(url, timeout=30)
+        total_size = int(response.headers.get("Content-Length", 0))
+        downloaded = 0
+        last_percent = -1
+
+        with open(part_path, "wb") as f:
+            while True:
+                chunk = response.read(8192)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+
+                if total_size > 0:
+                    percent = min(100, int(downloaded * 100 / total_size))
+                    if percent != last_percent and percent % 5 == 0:
+                        last_percent = percent
+                        mb_done = downloaded / (1024 * 1024)
+                        mb_total = total_size / (1024 * 1024)
+                        sys.stdout.write(
+                            f"\r      {Colors.ICON_WORKING} {description}... "
+                            f"{percent}% ({mb_done:.1f}/{mb_total:.1f} MB)"
+                        )
+                        sys.stdout.flush()
+                else:
+                    # No Content-Length: show bytes downloaded without percentage
+                    mb_done = downloaded / (1024 * 1024)
+                    if int(mb_done * 10) != last_percent:
+                        last_percent = int(mb_done * 10)
+                        sys.stdout.write(
+                            f"\r      {Colors.ICON_WORKING} {description}... "
+                            f"{mb_done:.1f} MB"
+                        )
+                        sys.stdout.flush()
+
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
+        # Atomic move: .part → final path
+        os.replace(str(part_path), str(dest_path))
+        print_substep(f"{description} complete", "done")
+        return True
+
+    except Exception as e:
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        print_substep(f"Download failed: {e}", "error")
+        print_substep(f"You can download manually from: {url}", "info")
+        return False
+
+    finally:
+        # Clean up partial download on failure (no-op on success since
+        # os.replace already moved the .part file to dest_path)
+        try:
+            if part_path.exists():
+                part_path.unlink()
+        except Exception:
+            pass
+
+
+def verify_checksum(file_path, expected_sha256):
+    """
+    Verify SHA-256 hash of a downloaded file.
+
+    Args:
+        file_path: Path to the file to verify
+        expected_sha256: Expected hex digest string
+
+    Returns:
+        True if hash matches, False otherwise
+    """
+    sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    actual = sha256.hexdigest()
+    if actual != expected_sha256:
+        print_substep("Checksum mismatch!", "error")
+        print_substep(f"Expected: {expected_sha256}", "info")
+        print_substep(f"Actual:   {actual}", "info")
+        return False
+    return True
+
+
+def patch_pth_file(embedded_dir):
+    """
+    Patch the python3XX._pth file to enable pip and package imports.
+
+    The embeddable Python distribution ships with a ._pth file that
+    restricts the import path. We need to uncomment 'import site' and
+    add 'Lib\\site-packages' so that pip-installed packages are importable.
+
+    Note: pip usage with the embeddable distribution is "not supported"
+    per CPython docs, but works reliably with this patching approach.
+    The ._pth format has been stable since Python 3.5. Re-test if
+    bumping EMBEDDED_PYTHON_VERSION to a new minor release.
+
+    Args:
+        embedded_dir: Path to the embedded Python directory
+
+    Returns:
+        True on success, False on failure
+    """
+    try:
+        # Find the ._pth file (e.g., python310._pth)
+        pth_files = list(embedded_dir.glob("python3*._pth"))
+
+        if not pth_files:
+            print_substep("Could not find ._pth file in embedded Python", "error")
+            return False
+
+        pth_file = pth_files[0]
+        content = pth_file.read_text(encoding="utf-8")
+        lines = content.splitlines()
+
+        # Collect path entries, skipping comments, blanks, and the
+        # import site directive (which we'll re-add at the end in
+        # the canonical position: paths first, import site last).
+        path_lines = []
+        has_site_packages = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Skip import site (commented or not) — added back at the end
+            if stripped in ("#import site", "import site"):
+                continue
+
+            # Skip blank lines and the stock comment
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            path_lines.append(stripped)
+            if "site-packages" in stripped:
+                has_site_packages = True
+
+        # Add site-packages path if not already present
+        if not has_site_packages:
+            path_lines.append("Lib\\site-packages")
+
+        # Add parent directory (project root) so that project modules
+        # like config.py, engine.py, utils.py are importable.
+        # The embedded Python dir is always <project_root>/python_embedded/,
+        # so ".." resolves to the project root at runtime.
+        if ".." not in path_lines:
+            path_lines.append("..")
+
+        # Canonical order: paths first, then import site last
+        path_lines.append("import site")
+
+        pth_file.write_text("\n".join(path_lines) + "\n", encoding="utf-8")
+
+        if VERBOSE_MODE:
+            print_substep(f"Patched {pth_file.name}", "done")
+
+        return True
+
+    except Exception as e:
+        print_substep(f"Failed to patch ._pth file: {e}", "error")
+        return False
+
+
+def _create_dll_search_sitecustomize(embedded_dir):
+    """
+    Create a sitecustomize.py in the embedded Python directory that configures
+    Windows DLL search paths at interpreter startup.
+
+    This ensures native extensions (.pyd files) can find their dependent DLLs
+    regardless of how the embedded Python is launched (via start.py, manually,
+    or from a subprocess). The file is automatically loaded by site.py
+    (triggered by 'import site' in the ._pth file).
+
+    No-op on non-Windows platforms.
+
+    Args:
+        embedded_dir: Path to the embedded Python directory
+    """
+    sitecustomize_path = Path(embedded_dir) / "sitecustomize.py"
+
+    content = """\
+# Auto-generated by start.py -- DO NOT EDIT
+# Configures DLL search paths for the embedded Python environment on Windows.
+# This ensures native extensions (.pyd) can locate their dependent DLLs.
+import os
+import sys
+
+if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+    _exe_dir = os.path.dirname(sys.executable)
+    _sp_dir = os.path.join(_exe_dir, "Lib", "site-packages")
+
+    for _d in [_exe_dir, _sp_dir]:
+        if os.path.isdir(_d):
+            try:
+                os.add_dll_directory(_d)
+            except OSError:
+                pass
+
+    # Add *.libs directories (standard wheel pattern for vendored native DLLs,
+    # created by auditwheel/delvewheel when packaging binary extensions)
+    if os.path.isdir(_sp_dir):
+        for _entry in os.listdir(_sp_dir):
+            if _entry.endswith(".libs"):
+                _libs_path = os.path.join(_sp_dir, _entry)
+                if os.path.isdir(_libs_path):
+                    try:
+                        os.add_dll_directory(_libs_path)
+                    except OSError:
+                        pass
+"""
+
+    try:
+        sitecustomize_path.write_text(content, encoding="utf-8")
+        if VERBOSE_MODE:
+            print_substep("Created sitecustomize.py for DLL search paths", "done")
+    except Exception as e:
+        print_substep(f"Could not create sitecustomize.py: {e}", "warning")
+
+
+def setup_embedded_python(root_dir):
+    """
+    Download and configure an embedded Python 3.10 environment for Windows.
+
+    This creates a fully self-contained Python installation inside the
+    project folder with pip bootstrapped and ready to install packages.
+
+    Args:
+        root_dir: Root directory of the project
+
+    Returns:
+        True on success, False on failure
+    """
+    embedded_dir = root_dir / EMBEDDED_PYTHON_DIR
+
+    # Check if already available
+    if is_embedded_python_available(root_dir):
+        print_substep(
+            f"Embedded Python {EMBEDDED_PYTHON_VERSION} already set up", "done"
+        )
+        return True
+
+    # Clean up any partial previous attempt
+    if embedded_dir.exists():
+        if not robust_rmtree(embedded_dir):
+            print_substep("Could not clean up partial install", "error")
+            return False
+
+    print_substep(
+        f"Setting up portable Python {EMBEDDED_PYTHON_VERSION} environment...", "info"
+    )
+
+    zip_path = root_dir / "_python_embedded.zip"
+    get_pip_path = root_dir / "_get-pip.py"
+
+    try:
+        # Step 1: Download embeddable Python
+        if not download_file(
+            EMBEDDED_PYTHON_URL,
+            zip_path,
+            f"Downloading Python {EMBEDDED_PYTHON_VERSION} embeddable package",
+        ):
+            return False
+
+        # Step 1b: Verify download integrity
+        if EMBEDDED_PYTHON_SHA256:
+            if not verify_checksum(zip_path, EMBEDDED_PYTHON_SHA256):
+                print_substep(
+                    "Downloaded file may be corrupted. "
+                    "Delete it and try again, or download manually.",
+                    "error",
+                )
+                return False
+            if VERBOSE_MODE:
+                print_substep("Checksum verified", "done")
+
+        # Step 1c: Validate zip archive
+        if not zipfile.is_zipfile(str(zip_path)):
+            print_substep("Downloaded file is not a valid zip archive", "error")
+            print_substep("Your network may be returning an error page instead", "info")
+            return False
+
+        # Step 2: Extract
+        print_substep("Extracting Python...")
+        try:
+            embedded_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(str(zip_path), "r") as zf:
+                zf.extractall(str(embedded_dir))
+            print_substep("Python extracted", "done")
+        except Exception as e:
+            print_substep(f"Extraction failed: {e}", "error")
+            return False
+
+        # Step 3: Patch ._pth file for pip and site-packages support
+        if not patch_pth_file(embedded_dir):
+            return False
+
+        # Step 3b: Create sitecustomize.py for DLL search path configuration
+        _create_dll_search_sitecustomize(embedded_dir)
+
+        # Step 4: Bootstrap pip
+        if not download_file(GET_PIP_URL, get_pip_path, "Downloading pip installer"):
+            return False
+
+        embedded_python = embedded_dir / "python.exe"
+        print_substep("Installing pip...")
+
+        pip_cmd = [str(embedded_python), str(get_pip_path)]
+        if VERBOSE_MODE:
+            result = subprocess.run(pip_cmd)
+        else:
+            result = subprocess.run(pip_cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print_substep("Failed to install pip", "error")
+            if not VERBOSE_MODE and hasattr(result, "stderr") and result.stderr:
+                error_lines = result.stderr.strip().split("\n")[-3:]
+                for line in error_lines:
+                    print(f"         {line}")
+            return False
+
+        # Step 5: Verify pip is usable
+        embedded_pip = embedded_dir / "Scripts" / "pip.exe"
+        if not embedded_pip.exists():
+            print_substep("pip was not created at expected location", "error")
+            return False
+
+        print_substep("pip installed", "done")
+
+        # Step 6: Install setuptools (provides pkg_resources, needed by perth and others)
+        # Modern get-pip.py no longer bundles setuptools, but many ML/AI packages
+        # (including resemble-perth) still import pkg_resources at runtime.
+        # Note: pkg_resources was removed in setuptools 81+ (targets Python 3.12+).
+        # On Python 3.10 pip resolves to a compatible older version automatically.
+        print_substep("Installing setuptools...")
+        setuptools_cmd = [
+            str(embedded_python),
+            "-m",
+            "pip",
+            "install",
+            "--no-warn-script-location",
+            "setuptools",
+        ]
+        if VERBOSE_MODE:
+            st_result = subprocess.run(setuptools_cmd)
+        else:
+            st_result = subprocess.run(setuptools_cmd, capture_output=True, text=True)
+
+        if st_result.returncode != 0:
+            print_substep(
+                "setuptools installation failed (pkg_resources may be unavailable)",
+                "warning",
+            )
+        else:
+            print_substep("setuptools installed", "done")
+
+        print()
+        print_substep(
+            f"Portable Python {EMBEDDED_PYTHON_VERSION} environment ready", "done"
+        )
+        return True
+
+    except Exception as e:
+        print_substep(f"Unexpected error during setup: {e}", "error")
+        return False
+
+    finally:
+        # Clean up temporary downloads
+        for temp_file in [zip_path, get_pip_path]:
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+            except Exception:
+                pass
+
+
+def prompt_portable_install(reason="portability"):
+    """
+    Offer Windows users the portable Python installation option.
+
+    Args:
+        reason: "compatibility" (Python 3.11+) or "portability" (Python 3.10)
+
+    Returns:
+        True if user wants portable mode, False for standard venv
+    """
+    major = sys.version_info.major
+    minor = sys.version_info.minor
+
+    print()
+
+    if reason == "compatibility":
+        # Python 3.11+ — lead with compatibility problem, mention portability
+        print(f"{Colors.YELLOW}{'=' * 60}{Colors.RESET}")
+        print(
+            f"   {Colors.YELLOW}{Colors.ICON_WARNING}  Python {major}.{minor} detected"
+            f" — Portable Mode recommended{Colors.RESET}"
+        )
+        print(f"{Colors.YELLOW}{'=' * 60}{Colors.RESET}")
+        print()
+        print("   On Windows, Python 3.11+ lacks pre-built binary packages")
+        print("   (wheels) for several key dependencies, including ONNX and")
+        print("   ONNXRuntime. This causes installation failures that are")
+        print("   difficult to resolve.")
+        print()
+        print(
+            f"   {Colors.GREEN}Portable Mode solves this automatically{Colors.RESET}"
+            f" by using a compatible"
+        )
+        print("   Python runtime, and as a bonus makes your entire installation")
+        print("   fully portable — copy it to a USB drive, share it as a zip")
+        print("   file, or move it anywhere.")
+    else:
+        # Python 3.10 — lead with portability benefits
+        print(f"{Colors.CYAN}{'=' * 60}{Colors.RESET}")
+        print(f"   {Colors.CYAN}📦  Portable Mode Available{Colors.RESET}")
+        print(f"{Colors.CYAN}{'=' * 60}{Colors.RESET}")
+        print()
+        print("   The launcher can create a fully self-contained installation.")
+        print("   The entire project folder — including Python and all")
+        print("   dependencies — becomes completely portable:")
+        print()
+        print("     • Copy to a USB drive and run on another PC")
+        print("     • Zip the folder and share it with others")
+        print("     • Move it anywhere on your filesystem")
+        print("     • No Python installation needed on the target machine")
+
+    print()
+
+    # Option 1 — Portable (default)
+    print(f"   {Colors.BOLD}[1] Install in Portable Mode (recommended){Colors.RESET}")
+    print("       Creates a self-contained Python environment inside this folder.")
+    print(
+        f"       Your system Python {major}.{minor} remains"
+        f" {Colors.GREEN}completely untouched{Colors.RESET}."
+    )
+    print()
+
+    # Option 2 — Standard venv
+    print("   [2] Standard installation")
+    if reason == "compatibility":
+        print(
+            f"       {Colors.DIM}Uses system Python {major}.{minor}"
+            f" with a virtual environment.{Colors.RESET}"
+        )
+        print(
+            f"       {Colors.DIM}May require Visual C++ Build Tools."
+            f" Not portable.{Colors.RESET}"
+        )
+    else:
+        print(
+            f"       {Colors.DIM}Uses a standard virtual environment."
+            f" Works fine but not portable.{Colors.RESET}"
+        )
+    print()
+
+    while True:
+        try:
+            choice = input("   Enter choice [1]: ").strip()
+
+            if choice in ("", "1"):
+                return True
+            elif choice == "2":
+                print()
+                if reason == "compatibility":
+                    print_substep(
+                        f"Continuing with system Python {major}.{minor}", "warning"
+                    )
+                    print_substep(
+                        "If installation fails, re-run with:"
+                        " python start.py --reinstall --portable",
+                        "info",
+                    )
+                else:
+                    print_substep("Using standard virtual environment", "info")
+                return False
+            else:
+                print_warning(f"   Invalid choice '{choice}'. Please enter 1 or 2.")
+                print()
+
+        except (EOFError, KeyboardInterrupt):
+            print()
+            print("   Aborted by user.")
+            sys.exit(2)
 
 
 # ============================================================================
@@ -792,17 +1415,14 @@ def show_installation_menu(gpu_info, default_choice):
 # ============================================================================
 
 
-def upgrade_pip(venv_pip):
+def upgrade_pip(venv_python):
     """
-    Upgrade pip in the virtual environment.
+    Upgrade pip in the environment.
+
+    Args:
+        venv_python: Path to the Python executable (venv or embedded)
     """
     print_substep("Upgrading pip...")
-
-    # Get the python executable associated with this pip
-    # This prevents file locking issues on Windows by running via python -m
-    venv_python = Path(venv_pip).parent / "python.exe"
-    if not venv_python.exists():
-        venv_python = Path(venv_pip).parent / "python"  # Linux/Mac fallback
 
     cmd = f'"{venv_python}" -m pip install --upgrade pip'
 
@@ -843,7 +1463,8 @@ def install_requirements(venv_pip, requirements_file, root_dir):
 
     print_substep(f"Installing from {requirements_file}...")
 
-    cmd = f'"{venv_pip}" install -r "{requirements_path}"'
+    # Suppress pip warnings about scripts not on PATH (common with embedded Python)
+    cmd = f'"{venv_pip}" install --no-warn-script-location -r "{requirements_path}"'
 
     success = run_command_with_progress(
         cmd,
@@ -911,6 +1532,138 @@ def perform_installation(venv_pip, install_type, root_dir):
             return False
 
     return True
+
+
+def _patch_chatterbox_watermarker(env_dir, use_embedded):
+    """
+    Patch installed chatterbox source files to make the Perth watermarker
+    gracefully optional. If perth fails to load or PerthImplicitWatermarker
+    is None, the server will skip watermarking instead of crashing.
+
+    Uses a no-op watermarker class so that all call sites (apply_watermark)
+    continue to work without modification — they just pass audio through
+    unchanged.
+
+    This patch is idempotent: re-running it on already-patched files is safe.
+
+    Args:
+        env_dir: Path to environment directory (venv or python_embedded)
+        use_embedded: True if using embedded Python environment
+    """
+    # Locate site-packages (differs between embedded, Windows venv, Linux/macOS venv)
+    if use_embedded or is_windows():
+        site_packages = env_dir / "Lib" / "site-packages"
+    else:
+        # Linux/macOS venv: lib/python3.X/site-packages
+        lib_dir = env_dir / "lib"
+        site_packages = None
+        if lib_dir.exists():
+            for child in sorted(lib_dir.iterdir()):
+                if child.name.startswith("python3") and child.is_dir():
+                    candidate = child / "site-packages"
+                    if candidate.is_dir():
+                        site_packages = candidate
+                        break
+        if site_packages is None:
+            print_substep(
+                "Could not locate site-packages, skipping watermarker patch",
+                "warning",
+            )
+            return
+
+    # Find chatterbox package directory (name varies by package version)
+    chatterbox_dir = None
+    for name in ["chatterbox", "chatterbox_tts"]:
+        candidate = site_packages / name
+        if candidate.is_dir():
+            chatterbox_dir = candidate
+            break
+
+    if chatterbox_dir is None:
+        if VERBOSE_MODE:
+            print_substep(
+                "Chatterbox package not found, skipping watermarker patch", "info"
+            )
+        return
+
+    SENTINEL = "# [patched by start.py: watermarker made optional]"
+    INIT_TARGET = "self.watermarker = perth.PerthImplicitWatermarker()"
+    target_files = ["tts.py", "tts_turbo.py", "mtl_tts.py", "vc.py"]
+    patched_count = 0
+
+    for filename in target_files:
+        filepath = chatterbox_dir / filename
+        if not filepath.exists():
+            continue
+
+        try:
+            content = filepath.read_text(encoding="utf-8")
+        except Exception as e:
+            print_substep(f"{filename}: could not read ({e}), skipping", "warning")
+            continue
+
+        # Idempotency: skip if already patched
+        if SENTINEL in content:
+            if VERBOSE_MODE:
+                print_substep(f"{filename}: already patched", "info")
+            continue
+
+        if INIT_TARGET not in content:
+            if VERBOSE_MODE:
+                print_substep(f"{filename}: target pattern not found, skipping", "info")
+            continue
+
+        # Determine whether this file uses the logging module
+        has_logger = "import logging" in content or "getLogger" in content
+        if has_logger:
+            log_line = (
+                "logger.warning("
+                '"Perth watermarker unavailable '
+                '\\u2014 audio will not be watermarked")'
+            )
+        else:
+            log_line = (
+                "print("
+                '"Warning: Perth watermarker unavailable '
+                '\\u2014 audio will not be watermarked")'
+            )
+
+        # Build the replacement block
+        lines = content.split("\n")
+        new_lines = []
+
+        for line in lines:
+            if INIT_TARGET in line and line.lstrip().startswith("self."):
+                indent = line[: len(line) - len(line.lstrip())]
+                new_lines.append(f"{indent}{SENTINEL}")
+                new_lines.append(f"{indent}try:")
+                new_lines.append(
+                    f"{indent}    self.watermarker = perth.PerthImplicitWatermarker()"
+                )
+                new_lines.append(f"{indent}except Exception:")
+                new_lines.append(f"{indent}    class _NoOpWatermarker:")
+                new_lines.append(
+                    f"{indent}        def apply_watermark(self, wav, *args, **kwargs):"
+                )
+                new_lines.append(f"{indent}            return wav")
+                new_lines.append(f"{indent}    self.watermarker = _NoOpWatermarker()")
+                new_lines.append(f"{indent}    {log_line}")
+            else:
+                new_lines.append(line)
+
+        try:
+            filepath.write_text("\n".join(new_lines), encoding="utf-8")
+            print_substep(f"{filename}: watermarker made optional", "done")
+            patched_count += 1
+        except Exception as e:
+            print_substep(f"{filename}: could not write ({e})", "warning")
+
+    if patched_count > 0:
+        print_substep(
+            f"Patched {patched_count} file(s) for optional watermarking", "done"
+        )
+    elif VERBOSE_MODE:
+        print_substep("No files needed watermarker patching", "info")
 
 
 def verify_installation(venv_python):
@@ -1153,7 +1906,7 @@ def wait_for_server(host, port, timeout=SERVER_STARTUP_TIMEOUT):
         True if server is ready, False if timeout
     """
     print_substep(
-        "Waiting for server to start (model loading may take 30-90 seconds)..."
+        "Waiting for server to start (this may take a few minutes on first run)..."
     )
 
     start_time = time.time()
@@ -1232,8 +1985,31 @@ def launch_server(venv_python, root_dir):
         # CREATE_NO_WINDOW flag
         kwargs["creationflags"] = 0
 
+    # For embedded Python on Windows, ensure the interpreter directory is on
+    # PATH so that python310.dll, vcruntime140.dll, and other co-located DLLs
+    # are discoverable by Windows when loading native extensions (.pyd files).
+    # This complements the sitecustomize.py os.add_dll_directory() approach.
+    env = None
+    embedded_dir = root_dir / EMBEDDED_PYTHON_DIR
+    if (
+        is_windows()
+        and embedded_dir.exists()
+        and str(venv_python).startswith(str(embedded_dir))
+    ):
+        env = os.environ.copy()
+        env["PATH"] = (
+            f"{embedded_dir}{os.pathsep}"
+            f"{embedded_dir / 'Scripts'}{os.pathsep}"
+            f"{env.get('PATH', '')}"
+        )
+        if VERBOSE_MODE:
+            print_substep("Injected embedded Python into subprocess PATH", "info")
+
     process = subprocess.Popen(
-        [str(venv_python), str(server_script)], cwd=str(root_dir), **kwargs
+        [str(venv_python), str(server_script)],
+        cwd=str(root_dir),
+        env=env,
+        **kwargs,
     )
 
     return process
@@ -1299,6 +2075,8 @@ Examples:
   python start.py --nvidia-cu128     # Install/start with NVIDIA CUDA 12.8
   python start.py --cpu              # Install/start with CPU only
   python start.py --rocm             # Install/start with AMD ROCm
+  python start.py --portable         # Use portable mode (Windows)
+  python start.py --no-portable      # Use standard venv (Windows)
   python start.py -v                 # Verbose mode (show all output)
 """,
     )
@@ -1333,6 +2111,19 @@ Examples:
     )
     install_group.add_argument(
         "--rocm", action="store_true", help="Install AMD ROCm version (Linux only)"
+    )
+
+    # Environment mode (Windows)
+    env_group = parser.add_argument_group("Environment Mode (Windows)")
+    env_group.add_argument(
+        "--portable",
+        action="store_true",
+        help="Use portable Python environment (Windows only, skip prompt)",
+    )
+    env_group.add_argument(
+        "--no-portable",
+        action="store_true",
+        help="Use standard virtual environment instead of portable (skip prompt)",
     )
 
     # Other options
@@ -1386,6 +2177,16 @@ def main():
     # Print banner
     print_banner()
 
+    # Validate portable mode flags
+    if args.portable and args.no_portable:
+        print_error("Cannot use --portable and --no-portable together.")
+        sys.exit(1)
+
+    if args.portable and not is_windows():
+        print_error("Portable mode is only available on Windows.")
+        print("On Linux and macOS, the standard virtual environment is used.")
+        sys.exit(1)
+
     # Total steps for progress display
     total_steps = 6
 
@@ -1395,13 +2196,100 @@ def main():
     print_step(1, total_steps, "Checking Python installation...")
     check_python_version()
 
+    # Portable mode decision (Windows only)
+    # Determines whether to use the self-contained embedded Python environment
+    # or a standard virtual environment. On Linux/macOS, always uses venv.
+    use_embedded = False
+
+    if not is_windows():
+        use_embedded = False
+
+    elif args.upgrade:
+        # During upgrade, preserve existing environment type
+        if args.portable or args.no_portable:
+            print_substep(
+                "--portable/--no-portable ignored during --upgrade. "
+                "Use --reinstall to switch modes.",
+                "warning",
+            )
+        if is_embedded_python_available(root_dir):
+            use_embedded = True
+            print_substep(
+                f"Using existing portable Python {EMBEDDED_PYTHON_VERSION}", "done"
+            )
+        else:
+            use_embedded = False
+
+    elif args.no_portable:
+        use_embedded = False
+        if sys.version_info >= (3, 11):
+            print_substep(
+                f"Using system Python {sys.version_info.major}.{sys.version_info.minor}"
+                f" (--no-portable). Build tools may be required.",
+                "warning",
+            )
+
+    elif args.portable:
+        use_embedded = True
+        print_substep("Portable Mode selected via --portable flag", "info")
+
+    elif TEST_EMBEDDED_PYTHON_PATH:
+        # In test mode: automatically use portable Python (no prompt)
+        use_embedded = True
+        print()
+        print(f"{Colors.YELLOW}{'=' * 60}{Colors.RESET}")
+        print(
+            f"   {Colors.YELLOW}{Colors.ICON_INFO}  TEST MODE: Simulating Python 3.11+"
+        )
+        print(
+            f"   {Colors.YELLOW}   → Forcing portable Python environment{Colors.RESET}"
+        )
+        print(f"{Colors.YELLOW}{'=' * 60}{Colors.RESET}")
+        print()
+
+    elif not args.reinstall and is_embedded_python_available(root_dir):
+        # Existing portable environment found — reuse it
+        use_embedded = True
+        print_substep(
+            f"Using existing portable Python {EMBEDDED_PYTHON_VERSION}", "done"
+        )
+
+    elif sys.version_info >= (3, 11):
+        use_embedded = prompt_portable_install(reason="compatibility")
+
+    else:
+        # Python 3.10 on Windows — offer portability
+        use_embedded = prompt_portable_install(reason="portability")
+
+    # Set up portable Python if chosen but not yet available
+    if use_embedded and not is_embedded_python_available(root_dir):
+        print()
+        if not setup_embedded_python(root_dir):
+            print()
+            print_error(
+                "Could not set up portable Python environment. "
+                "Falling back to system Python."
+            )
+            if sys.version_info >= (3, 11):
+                print_substep(
+                    "You may need Visual C++ Build Tools for a successful install",
+                    "warning",
+                )
+            use_embedded = False
+
     # ========================================================================
     # Step 2: Setup paths
     # ========================================================================
     print_step(2, total_steps, "Setting up environment...")
-    venv_dir, venv_python, venv_pip = get_venv_paths(root_dir)
-    print_substep(f"Project directory: {root_dir}", "info")
-    print_substep(f"Virtual environment: {venv_dir}", "info")
+
+    if use_embedded:
+        venv_dir, venv_python, venv_pip = get_embedded_python_paths(root_dir)
+        print_substep(f"Project directory: {root_dir}", "info")
+        print_substep(f"Python environment: {venv_dir} (portable)", "info")
+    else:
+        venv_dir, venv_python, venv_pip = get_venv_paths(root_dir)
+        print_substep(f"Project directory: {root_dir}", "info")
+        print_substep(f"Virtual environment: {venv_dir}", "info")
 
     # ========================================================================
     # Step 3: Handle reinstall/upgrade flags
@@ -1410,13 +2298,31 @@ def main():
 
     if args.reinstall:
         print_step(3, total_steps, "Preparing fresh reinstall...")
-        if venv_dir.exists():
-            if not remove_venv(venv_dir):
-                print_error("Could not remove existing installation.")
+
+        # Remove all possible environment directories (venv and/or embedded)
+        for env_name in [VENV_FOLDER, EMBEDDED_PYTHON_DIR]:
+            env_path = root_dir / env_name
+            if env_path.exists():
+                if not remove_venv(env_path):
+                    print_error(f"Could not remove {env_name}/.")
+                    print_substep(
+                        f"Please manually delete the '{env_name}' folder and try again.",
+                        "info",
+                    )
+                    sys.exit(1)
+
+        # Re-setup embedded Python if that path was chosen
+        if use_embedded:
+            if not setup_embedded_python(root_dir):
+                print_error("Failed to set up embedded Python after reinstall!")
                 print_substep(
-                    "Please manually delete the 'venv' folder and try again.", "info"
+                    "Try again, or run without --reinstall to use system Python.",
+                    "info",
                 )
                 sys.exit(1)
+            # Refresh paths after re-creation
+            venv_dir, venv_python, venv_pip = get_embedded_python_paths(root_dir)
+
         print_substep("Ready for fresh installation", "done")
 
     elif args.upgrade:
@@ -1446,6 +2352,22 @@ def main():
         if is_installed:
             type_name = INSTALL_NAMES.get(existing_type, existing_type)
             print_substep(f"Found existing {type_name} installation", "done")
+
+            # Warn Windows users on Python 3.11+ who are using system Python
+            if is_windows() and sys.version_info >= (3, 11) and not use_embedded:
+                major = sys.version_info.major
+                minor = sys.version_info.minor
+                print()
+                print_warning(
+                    f"   Note: You're running Python {major}.{minor} on Windows."
+                )
+                print_warning(
+                    "   If you experience CUDA or dependency issues, your Python"
+                )
+                print_warning("   version may be the cause. Consider reinstalling with")
+                print_warning(
+                    "   portable mode:  python start.py --reinstall --portable"
+                )
         else:
             print_substep("No existing installation found", "info")
 
@@ -1457,15 +2379,22 @@ def main():
     if not is_installed:
         print_step(4, total_steps, "Installing Chatterbox TTS Server...")
 
-        # Create venv if it doesn't exist
+        # Create environment if it doesn't exist
         if not venv_dir.exists():
-            if not create_venv(venv_dir):
-                print_error("Failed to create virtual environment!")
-                print()
-                print("Try creating it manually:")
-                print(f"  python -m venv {VENV_FOLDER}")
-                print()
-                sys.exit(1)
+            if use_embedded:
+                # Re-setup embedded Python (e.g., after a partial failure)
+                if not setup_embedded_python(root_dir):
+                    print_error("Failed to set up embedded Python environment!")
+                    sys.exit(1)
+                venv_dir, venv_python, venv_pip = get_embedded_python_paths(root_dir)
+            else:
+                if not create_venv(venv_dir):
+                    print_error("Failed to create virtual environment!")
+                    print()
+                    print("Try creating it manually:")
+                    print(f"  python -m venv {VENV_FOLDER}")
+                    print()
+                    sys.exit(1)
 
         # Determine installation type
         install_type = None
@@ -1522,7 +2451,7 @@ def main():
 
         # Upgrade pip
         print()
-        upgrade_pip(venv_pip)
+        upgrade_pip(venv_python)
 
         # Perform installation
         print()
@@ -1549,6 +2478,11 @@ def main():
                 print(f"     pip install --no-deps {CHATTERBOX_REPO}")
             print()
             sys.exit(1)
+
+        # Patch chatterbox to make watermarker gracefully optional
+        print()
+        print_substep("Applying post-install patches...")
+        _patch_chatterbox_watermarker(venv_dir, use_embedded)
 
         # Verify installation
         print()
