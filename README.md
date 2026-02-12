@@ -1,6 +1,6 @@
 # Chatterbox TTS Server: OpenAI-Compatible API with Web UI, Large Text Handling & Built-in Voices
 
-**Self-host Resemble AI's [Chatterbox](https://github.com/resemble-ai/chatterbox) open-source TTS family (Original + Chatterbox‑Turbo) behind an OpenAI‑compatible API and a modern Web UI. Chatterbox‑Turbo is a streamlined 350M-parameter model with dramatically improved throughput and native paralinguistic tags like `[laugh]`, `[cough]`, and `[chuckle]` for more expressive voice agents and narration. Features voice cloning, large text processing via intelligent chunking, audiobook generation, and consistent, reproducible voices using built-in ready-to-use voices and a generation seed feature.**
+**Self-host Resemble AI's [Chatterbox](https://github.com/resemble-ai/chatterbox) open-source TTS family (Original + Multilingual + Turbo) behind an OpenAI‑compatible API and a modern Web UI. The complete lineup includes the original high-quality model, multilingual support for 23 languages, and Chatterbox‑Turbo—a streamlined 350M-parameter model with dramatically improved throughput and native paralinguistic tags like `[laugh]`, `[cough]`, and `[chuckle]` for more expressive voice agents and narration. Features voice cloning, large text processing via intelligent chunking, audiobook generation, and consistent, reproducible voices using built-in ready-to-use voices and a generation seed feature.**
 
 > 🚀 **Try it now!** Test the full TTS server with voice cloning and audiobook generation in Google Colab - no installation required! To use it, please run cells 1 through 4 one at a time. After running cell 4, click on the "https://localhost:8004" link that appears in the output, and your web browser will open the UI from the .colab.dev domain. Read the instructions [here](https://github.com/devnen/Chatterbox-TTS-Server/blob/main/README_Colab.md).
 > 
@@ -26,9 +26,27 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
   <img src="static/screenshot-l.png" alt="Chatterbox TTS Server Web UI - Light Mode" width="33%" />
 </div>
 
+> 📦 **Portable Mode (Windows):** This application supports a fully portable installation — the entire folder, including Python and all dependencies, is self-contained. Copy it to a USB drive, share it as a zip, or move it anywhere. Just double-click `start.bat` — no Python installation needed on the target machine. [Learn more →](#-portable-mode-windows)
+
 ---
 
 ## 🆕 What's New
+
+### 📦 Portable Mode for Windows (new)
+
+- The launcher now offers **Portable Mode** for all Windows users during first-time setup — selected by default.
+- Creates a fully self-contained installation: the entire project folder can be **copied to a USB drive**, **zipped and shared**, or **moved anywhere** on the filesystem.
+- The recipient just double-clicks `start.bat` — **no Python installation required** on the target machine.
+- Works with any system Python 3.10 or newer. On Python 3.11+, Portable Mode also resolves dependency compatibility issues automatically.
+- Use `--portable` to skip the prompt and install in portable mode directly, or `--no-portable` for a standard virtual environment.
+- Linux and macOS continue to use standard virtual environments, which work reliably on those platforms.
+
+### 🌍 Chatterbox Multilingual support (new)
+
+- Added full support for **Chatterbox Multilingual**, completing support for all three models in Resemble AI's Chatterbox family.
+- Multilingual brings **23-language support** including Arabic, Chinese, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Norwegian, Polish, Portuguese, Russian, Spanish, Swedish, Swahili, and Turkish.
+- Built on the same **0.5B-parameter architecture** as the original Chatterbox with emotion exaggeration control and zero-shot voice cloning.
+- Perfect for international projects, multilingual audiobooks, and voice agents serving global audiences.
 
 ### ⚡ Chatterbox‑Turbo support (new)
 
@@ -40,8 +58,9 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 ### 🔁 Hot‑swappable TTS engines (UI)
 
 - Added a new **engine selector** dropdown at the top of the Web UI.
-- Instantly hot-swap between **Original Chatterbox** and **Chatterbox‑Turbo**; the backend auto-loads the selected engine.
-- All UI + API requests route through the active engine so you can A/B test quality vs latency without changing client code.
+- Instantly hot-swap between **Original Chatterbox**, **Chatterbox Multilingual**, and **Chatterbox‑Turbo**; the backend auto-loads the selected engine.
+- All three models are **hot-swappable**—simply select from the dropdown and the backend automatically loads your choice without requiring restarts or configuration changes.
+- All UI + API requests route through the active engine so you can A/B test quality, language support, and latency without changing client code.
 
 ### 🎭 Paralinguistic tags (Turbo)
 
@@ -52,6 +71,15 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 ### ✅ Original Chatterbox remains first‑class
 
 - The original Chatterbox model remains available, with support for high quality English language output, a **0.5B LLaMA backbone**, **emotion exaggeration control**, and training on **0.5M hours** of cleaned data.
+
+### 🎯 Complete Chatterbox family support
+
+**You now have access to the entire Chatterbox lineup:**
+- **Original Chatterbox** — High-quality English output with emotion control (0.5B parameters, 0.5M hours training data)
+- **Chatterbox Multilingual** — 23-language support with voice cloning and emotion control (0.5B parameters)
+- **Chatterbox Turbo** — Fastest inference with paralinguistic tags like `[laugh]` and `[cough]` (350M parameters, 1-step diffusion)
+
+**Switching models is effortless:** Simply select your preferred model from the engine selector dropdown at the top of the Web UI. No restarts, no configuration changes required—just instant hot-swapping to test quality, speed, and language support across the complete Chatterbox family.
 
 ### 🖥️ New NVIDIA / CUDA support
 
@@ -98,9 +126,11 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 **🚀 Core Functionality:**
 
 *   **Multi-Engine Support:**
-    *   Choose between **Original Chatterbox** and **Chatterbox‑Turbo** via a hot-swappable engine selector in the Web UI.
-    *   Turbo offers significantly faster inference with a streamlined 350M-parameter architecture.
-    *   Original Chatterbox provides multilingual support (23 languages) and emotion exaggeration control.
+    *   Choose between **Original Chatterbox**, **Chatterbox Multilingual**, and **Chatterbox‑Turbo** via a hot-swappable engine selector in the Web UI.
+    *   **Original Chatterbox** provides high-quality English output with emotion exaggeration control (0.5B parameters).
+    *   **Chatterbox Multilingual** offers 23-language support with voice cloning and emotion control (0.5B parameters).
+    *   **Chatterbox Turbo** delivers significantly faster inference with a streamlined 350M-parameter architecture and paralinguistic tags.
+    *   All three models are hot-swappable—simply select from the dropdown without restarts or config changes.
 *   **Paralinguistic Tags (Turbo):**
     *   Write native tags like `[laugh]`, `[cough]`, and `[chuckle]` directly in your text when using Chatterbox‑Turbo.
     *   New presets demonstrate paralinguistic prompting for agent-style scripts and expressive narration.
@@ -131,8 +161,8 @@ This server application enhances the underlying `chatterbox-tts` engine with the
     *   🚀 **Automated Launcher** (`start.bat` / `start.sh`) - One-command setup with automatic hardware detection
     *   🔧 **Multiple GPU Support** - NVIDIA CUDA 12.1, NVIDIA CUDA 12.8 (Blackwell), AMD ROCm, Apple MPS
     *   🔄 **Easy Updates** - Simple `--upgrade` and `--reinstall` commands
-    *   📦 **Isolated Environment** - Automatic virtual environment management
-    *   🎯 **Skip Menu Options** - Direct installation with `--cpu`, `--nvidia`, `--nvidia-cu128`, `--rocm` flags
+    *   📦 **Portable Mode (Windows)** - Self-contained, movable installation — copy to USB, share as zip, run anywhere without Python
+    *   🎯 **Skip Menu Options** - Direct installation with `--cpu`, `--nvidia`, `--nvidia-cu128`, `--rocm`, `--portable` flags
 *   **Performance:** Optimized for speed and efficient VRAM usage on GPU.
 *   **Web Interface:** Modern, responsive UI for plain text input, parameter adjustment, preset loading, reference/predefined audio management, and audio playback.
 *   **Model Loading:** Uses `ChatterboxTTS.from_pretrained()` for robust model loading from Hugging Face Hub, utilizing the standard HF cache.
@@ -144,15 +174,16 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 *   **Core Chatterbox Capabilities (via [Resemble AI Chatterbox](https://github.com/resemble-ai/chatterbox)):**
     *   🗣️ High-quality single-speaker voice synthesis from plain text.
     *   🎤 Perform voice cloning using reference audio prompts.
-    *   ⚡ **Chatterbox‑Turbo** for significantly faster inference with paralinguistic tag support.
-    *   🌍 **Original Chatterbox** with high quality English output and emotion exaggeration control.
+    *   🎯 **Complete model family:** Original Chatterbox (English, emotion control), Chatterbox Multilingual (23 languages), and Chatterbox‑Turbo (fastest, paralinguistic tags).
+    *   🔄 **Hot-swappable engines:** Switch between all three models instantly via dropdown—no restarts needed.
 *   **Enhanced Server & API:**
     *   ⚡ Built with the high-performance **[FastAPI](https://fastapi.tiangolo.com/)** framework.
     *   ⚙️ **Custom API Endpoint** (`/tts`) as the primary method for programmatic generation, exposing all key parameters.
     *   📄 Interactive API documentation via Swagger UI (`/docs`).
     *   🩺 Health check endpoint (`/api/ui/initial-data` also serves as a comprehensive status check).
 *   **Advanced Generation Features:**
-    *   🔁 **Hot-Swappable Engines:** Switch between Original Chatterbox and Chatterbox‑Turbo directly in the Web UI.
+    *   🔁 **Hot-Swappable Engines:** Switch between Original Chatterbox, Chatterbox Multilingual, and Chatterbox‑Turbo directly in the Web UI—no restarts required.
+    *   🌍 **Multilingual Support:** 23 languages including Arabic, Chinese, French, German, Japanese, Spanish, and more via Chatterbox Multilingual.
     *   🎭 **Paralinguistic Tags (Turbo):** Native support for `[laugh]`, `[cough]`, `[chuckle]` and other expressive tags.
     *   📚 **Large Text Handling:** Intelligently splits long plain text inputs into chunks based on sentences, generates audio for each, and concatenates the results seamlessly. Configurable via `split_text` and `chunk_size`.
     *   📖 **Audiobook Creation:** Perfect for generating complete audiobooks from full-length texts with consistent voice quality and automatic chapter handling.
@@ -162,7 +193,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
     *   🔇 **Audio Post-Processing:** Optional automatic steps to trim silence, fix internal pauses, and remove long unvoiced segments/artifacts (configurable via `config.yaml`).
 *   **Intuitive Web User Interface:**
     *   🖱️ Modern, easy-to-use interface.
-    *   🔁 **Engine Selector:** Hot-swap between Original Chatterbox and Chatterbox‑Turbo.
+    *   🔁 **Engine Selector:** Hot-swap between Original Chatterbox, Chatterbox Multilingual, and Chatterbox‑Turbo with a simple dropdown—no restarts needed.
     *   💡 **Presets:** Load example text and settings dynamically from `ui/presets.yaml`.
     *   🎤 **Reference/Predefined Audio Upload:** Easily upload `.wav`/`.mp3` files.
     *   🗣️ **Voice Mode Selection:** Choose between Predefined Voices or Voice Cloning.
@@ -182,6 +213,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
     *   💻 **GPU Acceleration:** Automatically uses NVIDIA CUDA, Apple MPS, or AMD ROCm if available, falls back to CPU.
     *   ⚙️ All configuration via `config.yaml`.
     *   📦 Uses standard Python virtual environments.
+    *   📦 **Portable Mode (Windows):** Self-contained installation that can be copied, moved, or shared — no Python needed on the target machine.
 *   **Docker Support:**
     *   🐳 Containerized deployment via [Docker](https://www.docker.com/) and Docker Compose.
     *   🔌 NVIDIA GPU acceleration with Container Toolkit integration.
@@ -191,7 +223,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 ## 🔩 System Prerequisites
 
 *   **Operating System:** Windows 10/11 (64-bit) or Linux (Debian/Ubuntu recommended).
-*   **Python:** Version 3.10 or later ([Download](https://www.python.org/downloads/)).
+*   **Python:** Version 3.10 or later ([Download](https://www.python.org/downloads/)). *When using Portable Mode on Windows, Python is only needed on the machine where you first set up the application. The target machine (where you copy/share the folder to) does not need Python installed at all.*
 *   **Git:** For cloning the repository ([Download](https://git-scm.com/downloads)).
 *   **Internet:** For downloading dependencies and models from Hugging Face Hub.
 *   **Disk Space:** 10GB+ recommended (for dependencies and model cache).
@@ -252,9 +284,10 @@ chmod +x start.sh
 #### What Happens
 
 1. The launcher checks your Python installation (3.10+ required)
-2. Creates a virtual environment automatically
-3. Detects your GPU hardware (NVIDIA, AMD, or CPU-only)
-4. Shows an installation menu with recommended option pre-selected:
+2. **On Windows:** Offers **Portable Mode** (recommended) — creates a fully self-contained, movable installation. See [Portable Mode](#-portable-mode-windows) for details. Use `--portable` to skip this prompt or `--no-portable` for a standard virtual environment.
+3. Sets up the Python environment (portable or standard virtual environment)
+4. Detects your GPU hardware (NVIDIA, AMD, or CPU-only)
+5. Shows an installation menu with recommended option pre-selected:
 
 ```
 ══════════════════════════════════════════════════════════════
@@ -297,6 +330,8 @@ chmod +x start.sh
 | `--nvidia` | Install NVIDIA CUDA 12.1 version (skip menu) |
 | `--nvidia-cu128` | Install NVIDIA CUDA 12.8 version for RTX 5090/Blackwell (skip menu) |
 | `--rocm` | Install AMD ROCm version (skip menu) |
+| `--portable` | Use portable Python environment on Windows (skip prompt) |
+| `--no-portable` | Use standard virtual environment on Windows (skip prompt) |
 | `--verbose` or `-v` | Show detailed installation output |
 | `--help` or `-h` | Show help message |
 
@@ -312,8 +347,21 @@ python start.py --reinstall
 # Upgrade to latest version (keeps your hardware selection)
 python start.py --upgrade
 
+```bash
 # Install with verbose output for troubleshooting
 python start.py --reinstall --nvidia --verbose
+
+# Install in portable mode (Windows) - skip prompt
+python start.py --portable
+
+# Switch from standard to portable mode
+python start.py --reinstall --portable
+
+# Force standard virtual environment (skip portable prompt)
+python start.py --no-portable
+```
+
+#### Subsequent Runs
 ```
 
 #### Subsequent Runs
@@ -329,6 +377,69 @@ start.bat
 ```
 
 The launcher detects the existing installation and starts the server directly without reinstalling.
+
+---
+
+### 📦 Portable Mode (Windows)
+
+On Windows, the launcher offers **Portable Mode** — a fully self-contained installation where the entire project folder, including its own private Python runtime and all dependencies, lives in one place. Unlike standard Python virtual environments (which use hardcoded absolute paths and break when moved), the portable installation uses only relative paths and works from any location.
+
+#### What You Can Do With It
+
+Once the first-time setup completes, the entire project folder can be:
+
+*   **Copied to a different directory** on the same machine — it still works.
+*   **Copied to a USB drive** and run on another Windows PC — no Python needed on that machine.
+*   **Zipped up and shared** with someone else — they unzip, double-click `start.bat`, and it runs.
+*   **Moved anywhere** on the filesystem without breaking anything.
+
+The recipient doesn't need Python installed, doesn't need to run any setup, and doesn't need an internet connection to launch the server (see note about models below).
+
+#### First Run vs. Subsequent Runs
+
+*   **First run:** The launcher sets up the portable Python environment and installs all dependencies (PyTorch, CUDA libraries, etc.). This requires an internet connection and takes a few minutes. The resulting folder will be several GB due to PyTorch and GPU libraries.
+*   **Subsequent runs:** The launcher detects the existing portable environment and starts the server in seconds. No internet needed, no setup repeated.
+
+#### Note About Model Downloads
+
+The TTS models (~2+ GB) are downloaded from Hugging Face Hub into a **separate cache folder** the first time the server starts on any machine. This is a one-time download per machine, independent of the portable application folder.
+
+If you're sharing a portable installation, the recipient will need an internet connection for this initial model download on their first run. To pre-include models in the portable package, you can set the `model_cache` path in `config.yaml` to a folder inside the project directory, then include it when sharing.
+
+#### When Does the Portable Prompt Appear?
+
+During first-time setup on Windows, the launcher offers a choice:
+
+*   **Portable Mode** (recommended, default): Creates a self-contained `python_embedded/` environment inside the project folder. Works with any system Python 3.10+.
+*   **Standard installation**: Uses a regular Python virtual environment (`venv/`). Works fine but is not portable.
+
+On **Python 3.11+**, Portable Mode is especially recommended because it also resolves compatibility issues with missing binary packages (ONNX, ONNXRuntime) that affect newer Python versions on Windows.
+
+You can skip the prompt entirely with command-line flags:
+*   `python start.py --portable` — go straight to portable mode
+*   `python start.py --no-portable` — go straight to standard venv
+*   `python start.py --reinstall --portable` — switch an existing installation to portable mode
+
+#### Not Available on Linux / macOS
+
+Portable Mode is Windows-specific. On Linux and macOS, the standard virtual environment is used. This works reliably on those platforms because the dependency compatibility issues that motivated portable mode are Windows-specific.
+
+#### GPU Drivers Still Required
+
+Portable Mode includes Python and all Python packages, but **GPU drivers are not included**. If the target machine has an NVIDIA GPU and you want GPU acceleration, the appropriate NVIDIA drivers must be installed on that machine. CPU mode works without any drivers.
+
+<details>
+<summary><strong>🔧 Technical Details (for developers/contributors)</strong></summary>
+
+**How it works under the hood:**
+
+*   Portable Mode uses the official **CPython 3.10.11 embeddable distribution** from python.org — a minimal, self-contained Python runtime (~8 MB before dependencies are installed).
+*   The embeddable distribution's `python310._pth` file is patched to use **relative paths** (`.`, `..`, `Lib\site-packages`). The `..` entry resolves to the project root since `python_embedded/` is always one level deep. This is what makes portability work — no absolute paths are written anywhere.
+*   There is no virtual environment activation step. No `activate.bat`, no `activate.ps1`, no hardcoded paths. The launcher simply runs `python_embedded/python.exe` directly.
+*   The launcher bootstraps `pip` via `get-pip.py`, explicitly installs `setuptools` (needed by the `perth` watermarking library at runtime), generates a `sitecustomize.py` for DLL search path configuration, and patches the TTS engine's watermarker initialization for resilience.
+*   The `start.bat` batch file finds any system Python to launch `start.py`, which then detects the existing `python_embedded/` directory and uses it — regardless of which system Python version invoked the launcher.
+
+</details>
 
 ---
 
@@ -1039,6 +1150,18 @@ lspci | grep VGA
     - Close all terminals and editors that might have files open in the venv folder
     - Try running as Administrator
     - Manually delete the venv folder: `rmdir /s /q venv`
+
+*   **How do I switch between portable and standard mode?**
+    - Use `--reinstall` to remove the existing environment and choose again
+    - Or specify directly: `python start.py --reinstall --portable` or `python start.py --reinstall --no-portable`
+
+*   **I shared my portable folder but models are downloading again:**
+    - TTS models are cached separately from the application folder (in the Hugging Face cache)
+    - Each machine downloads models once on first run
+    - To include models in the portable package, set `model_cache` in `config.yaml` to a path inside the project folder
+
+*   **Portable mode isn't offered / I'm on Linux:**
+    - Portable Mode is Windows-only. On Linux and macOS, the standard virtual environment is used, which works reliably on those platforms
 
 *   **Wrong hardware detected:**
     - The launcher detects NVIDIA GPUs via `nvidia-smi` and AMD GPUs via `rocm-smi`
