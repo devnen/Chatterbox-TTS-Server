@@ -316,9 +316,9 @@ chmod +x start.sh
    Enter choice [2]: 
 ```
 
-5. Press **Enter** to accept the recommended default, or type a number to select a different option
-6. Dependencies are installed automatically (this may take several minutes on first run)
-7. The server starts and displays the access URLs
+6. Press **Enter** to accept the recommended default, or type a number to select a different option
+7. Dependencies are installed automatically (this may take several minutes on first run)
+8. The server starts and displays the access URLs
 
 #### Launcher Command-Line Options
 
