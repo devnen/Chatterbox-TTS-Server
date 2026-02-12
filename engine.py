@@ -23,6 +23,16 @@ except ImportError:
     ChatterboxTurboTTS = None
     TURBO_AVAILABLE = False
 
+# Defensive Multilingual import
+try:
+    from chatterbox import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
+
+    MULTILINGUAL_AVAILABLE = True
+except ImportError:
+    ChatterboxMultilingualTTS = None
+    SUPPORTED_LANGUAGES = {}
+    MULTILINGUAL_AVAILABLE = False
+
 # Import the singleton config_manager
 from config import config_manager
 
@@ -34,6 +44,13 @@ if TURBO_AVAILABLE:
 else:
     logger.info("ChatterboxTurboTTS not available in installed chatterbox package.")
 
+# Log Multilingual availability status at module load time
+if MULTILINGUAL_AVAILABLE:
+    logger.info("ChatterboxMultilingualTTS is available in the installed chatterbox package.")
+    logger.info(f"Supported languages: {list(SUPPORTED_LANGUAGES.keys())}")
+else:
+    logger.info("ChatterboxMultilingualTTS not available in installed chatterbox package.")
+
 # Model selector whitelist - maps config values to model types
 MODEL_SELECTOR_MAP = {
     # Original model selectors
@@ -44,6 +61,9 @@ MODEL_SELECTOR_MAP = {
     "chatterbox-turbo": "turbo",
     "turbo": "turbo",
     "resembleai/chatterbox-turbo": "turbo",
+    # Multilingual model selectors
+    "chatterbox-multilingual": "multilingual",
+    "multilingual": "multilingual",
 }
 
 # Paralinguistic tags supported by Turbo model
@@ -138,7 +158,7 @@ def _get_model_class(selector: str) -> tuple:
         Tuple of (model_class, model_type_string)
 
     Raises:
-        ImportError: If Turbo is selected but not available in the package
+        ImportError: If Turbo or Multilingual is selected but not available in the package
     """
     selector_normalized = selector.lower().strip()
     model_type = MODEL_SELECTOR_MAP.get(selector_normalized)
@@ -156,6 +176,19 @@ def _get_model_class(selector: str) -> tuple:
         )
         return ChatterboxTurboTTS, "turbo"
 
+    if model_type == "multilingual":
+        if not MULTILINGUAL_AVAILABLE:
+            raise ImportError(
+                f"Model selector '{selector}' requires ChatterboxMultilingualTTS, "
+                f"but it is not available in the installed chatterbox package. "
+                f"Please update the chatterbox-tts package to the latest version, "
+                f"or use 'chatterbox' to select the original model."
+            )
+        logger.info(
+            f"Model selector '{selector}' resolved to Multilingual model (ChatterboxMultilingualTTS)"
+        )
+        return ChatterboxMultilingualTTS, "multilingual"
+
     if model_type == "original":
         logger.info(
             f"Model selector '{selector}' resolved to Original model (ChatterboxTTS)"
@@ -165,7 +198,7 @@ def _get_model_class(selector: str) -> tuple:
     # Unknown selector - default to original with warning
     logger.warning(
         f"Unknown model selector '{selector}'. "
-        f"Valid values: chatterbox, chatterbox-turbo, original, turbo, "
+        f"Valid values: chatterbox, chatterbox-turbo, chatterbox-multilingual, original, turbo, multilingual, "
         f"ResembleAI/chatterbox, ResembleAI/chatterbox-turbo. "
         f"Defaulting to original ChatterboxTTS model."
     )
@@ -182,7 +215,7 @@ def get_model_info() -> dict:
     """
     return {
         "loaded": MODEL_LOADED,
-        "type": loaded_model_type,  # "original" or "turbo"
+        "type": loaded_model_type,  # "original", "turbo", or "multilingual"
         "class_name": loaded_model_class_name,
         "device": model_device,
         "sample_rate": chatterbox_model.sr if chatterbox_model else None,
@@ -191,6 +224,11 @@ def get_model_info() -> dict:
             TURBO_PARALINGUISTIC_TAGS if loaded_model_type == "turbo" else []
         ),
         "turbo_available_in_package": TURBO_AVAILABLE,
+        "multilingual_available_in_package": MULTILINGUAL_AVAILABLE,
+        "supports_multilingual": loaded_model_type == "multilingual",
+        "supported_languages": (
+            SUPPORTED_LANGUAGES if loaded_model_type == "multilingual" else {"en": "English"}
+        ),
     }
 
 
@@ -344,6 +382,7 @@ def synthesize(
     exaggeration: float = 0.5,
     cfg_weight: float = 0.5,
     seed: int = 0,
+    language: str = "en",
 ) -> Tuple[Optional[torch.Tensor], Optional[int]]:
     """
     Synthesizes audio from text using the loaded TTS model.
@@ -356,6 +395,7 @@ def synthesize(
         cfg_weight: Classifier-Free Guidance weight.
         seed: Random seed for generation. If 0, default randomness is used.
               If non-zero, a global seed is set for reproducibility.
+        language: Language code for multilingual model (e.g., 'en', 'it', 'de').
 
     Returns:
         A tuple containing the audio waveform (torch.Tensor) and the sample rate (int),
@@ -379,17 +419,29 @@ def synthesize(
 
         logger.debug(
             f"Synthesizing with params: audio_prompt='{audio_prompt_path}', temp={temperature}, "
-            f"exag={exaggeration}, cfg_weight={cfg_weight}, seed_applied_globally_if_nonzero={seed}"
+            f"exag={exaggeration}, cfg_weight={cfg_weight}, seed_applied_globally_if_nonzero={seed}, "
+            f"language={language}"
         )
 
         # Call the core model's generate method
-        wav_tensor = chatterbox_model.generate(
-            text=text,
-            audio_prompt_path=audio_prompt_path,
-            temperature=temperature,
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight,
-        )
+        # Multilingual model requires language_id parameter
+        if loaded_model_type == "multilingual":
+            wav_tensor = chatterbox_model.generate(
+                text=text,
+                language_id=language,
+                audio_prompt_path=audio_prompt_path,
+                temperature=temperature,
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+            )
+        else:
+            wav_tensor = chatterbox_model.generate(
+                text=text,
+                audio_prompt_path=audio_prompt_path,
+                temperature=temperature,
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+            )
 
         # The ChatterboxTTS.generate method already returns a CPU tensor.
         return wav_tensor, chatterbox_model.sr
