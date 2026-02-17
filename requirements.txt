@@ -42,7 +42,10 @@ python-multipart               # Form data parsing for FastAPI
 requests                       # HTTP client library
 Jinja2                        # Template engine
 aiofiles                      # Async file operations
-hf_transfer                     # Speed up file transfers with the Hugging Face Hub.
+hf_transfer                   # Speed up file transfers with the Hugging Face Hub
+
+# --- LLM Integration (Optional) ---
+litellm>=1.0.0                # Unified LLM API for preprocessing (supports 100+ providers)
 
 
 # --- Configuration & Data Processing ---
