@@ -134,11 +134,19 @@
                                     </svg>
                                     Generate Speech
                                 </button>
-                                <label for="split-text-toggle" class="checkbox-label">
-                                    <input type="checkbox" id="split-text-toggle" name="split_text"
-                                        class="form-checkbox">
-                                    <span>Split text into chunks</span>
-                                </label>
+                                <div class="flex-row flex-wrap items-center gap-4">
+                                    <label for="stream-audio-toggle" class="checkbox-label"
+                                        title="Play audio immediately as it generates">
+                                        <input type="checkbox" id="stream-audio-toggle" name="stream_audio"
+                                            class="form-checkbox" checked>
+                                        <span>Stream Audio</span>
+                                    </label>
+                                    <label for="split-text-toggle" class="checkbox-label">
+                                        <input type="checkbox" id="split-text-toggle" name="split_text"
+                                            class="form-checkbox">
+                                        <span>Split text into chunks</span>
+                                    </label>
+                                </div>
                                 <div id="chunk-size-controls" class="flex-row items-center gap-2 hidden">
                                     <label for="chunk-size-slider" class="form-label small">Chunk Size:</label>
                                     <input type="range" id="chunk-size-slider" name="chunk_size" min="50" max="1000"

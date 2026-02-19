@@ -12,6 +12,13 @@ document.addEventListener('DOMContentLoaded', async function () {
     let saveStateTimeout = null;
     let currentPresetName = null;
 
+    // Streaming Audio Context & Visualizer
+    let audioCtx = null;
+    let audioNextStartTime = 0;
+    let analyser = null;
+    let visualizerAnimationId = null;
+    let leftoverChunkBytes = new Uint8Array(0);
+
     let currentConfig = {};
     let currentUiState = {};
     let appPresets = [];
@@ -149,7 +156,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             });
 
             // Add selected class to the parent of the checked radio
-            // CORRECTED: Selector updated to match HTML
             const selectedOption = this.closest('.voice-mode__option');
             if (selectedOption) {
                 selectedOption.classList.add('selected');
@@ -160,7 +166,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Set initial state
     const checkedRadio = document.querySelector('input[name="voice_mode"]:checked');
     if (checkedRadio) {
-        // CORRECTED: Selector updated to match HTML
         const selectedOption = checkedRadio.closest('.voice-mode__option');
         if (selectedOption) {
             selectedOption.classList.add('selected');
@@ -182,13 +187,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         notificationDiv.className = `notification ${type}`;
         notificationDiv.setAttribute('role', 'alert');
 
-        // Build notification structure
         notificationDiv.innerHTML = `
             ${icons[type] || icons['info']}
             <div class="notification__content"><span>${message}</span></div>
         `;
 
-        // Create close button
         const closeButton = document.createElement('button');
         closeButton.type = 'button';
         closeButton.className = 'notification__close';
@@ -221,12 +224,54 @@ document.addEventListener('DOMContentLoaded', async function () {
         return `${minutes}:${secs}`;
     }
 
+    function visualizeStream(canvasElement) {
+        if (!analyser || !canvasElement) return;
+
+        const canvasCtx = canvasElement.getContext("2d");
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const draw = () => {
+            if (!isGenerating) {
+                cancelAnimationFrame(visualizerAnimationId);
+                return;
+            }
+            visualizerAnimationId = requestAnimationFrame(draw);
+
+            analyser.getByteTimeDomainData(dataArray);
+
+            canvasCtx.fillStyle = document.documentElement.classList.contains('dark') ? '#1e293b' : '#f1f5f9';
+            canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeStyle = document.documentElement.classList.contains('dark') ? '#6366f1' : '#4f46e5';
+            canvasCtx.beginPath();
+
+            const sliceWidth = canvasElement.width * 1.0 / bufferLength;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * canvasElement.height / 2;
+
+                if (i === 0) canvasCtx.moveTo(x, y);
+                else canvasCtx.lineTo(x, y);
+
+                x += sliceWidth;
+            }
+
+            canvasCtx.lineTo(canvasElement.width, canvasElement.height / 2);
+            canvasCtx.stroke();
+        };
+
+        draw();
+    }
+
     // --- Theme Management ---
     function applyTheme(theme) {
         const isDark = theme === 'dark';
         document.documentElement.classList.toggle('dark', isDark);
 
-        // WaveSurfer color update
         if (wavesurfer) {
             wavesurfer.setOptions({
                 waveColor: isDark ? '#6366f1' : '#a5b4fc',
@@ -279,7 +324,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     function debouncedSaveState() {
-        // Do not save anything until the entire UI has finished its initial setup.
         if (!uiReady || !listenersAttached) { return; }
         clearTimeout(saveStateTimeout);
         saveStateTimeout = setTimeout(saveCurrentUiState, DEBOUNCE_DELAY_MS);
@@ -298,7 +342,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
-    // --- Model Management Functions (New Features) ---
+    // --- Model Management Functions ---
 
     function updateModelUI(modelInfo) {
         if (!modelInfo) {
@@ -308,11 +352,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         currentModelInfo = modelInfo;
 
-        // Update model indicator badge
         if (modelIndicator && modelBadge) {
             modelIndicator.classList.remove('hidden');
 
-            // Use simplified modifier classes
             if (modelInfo.type === 'turbo') {
                 modelBadge.className = 'model-badge turbo';
                 modelBadgeText.textContent = '⚡ Turbo';
@@ -325,7 +367,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         }
 
-        // Update model status indicator
         if (modelStatusIndicator && modelStatusText) {
             if (modelInfo.loaded) {
                 modelStatusIndicator.className = 'status-dot success';
@@ -338,7 +379,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         }
 
-        // Update model selector dropdown to match loaded model
         if (modelSelect && !modelChangesPending) {
             let selectorValue = 'chatterbox';
             if (modelInfo.type === 'turbo') {
@@ -350,11 +390,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             selectedModelSelector = selectorValue;
         }
 
-        // Show/hide model-specific UI sections
         const exaggerationGroup = document.getElementById('exaggeration-group');
         const cfgWeightGroup = document.getElementById('cfg-weight-group');
 
-        // Show/hide paralinguistic tags section (Turbo only)
         if (paralinguisticTagsSection) {
             if (modelInfo.type === 'turbo' && modelInfo.supports_paralinguistic_tags) {
                 paralinguisticTagsSection.classList.remove('hidden');
@@ -363,7 +401,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         }
 
-        // Hide exaggeration and CFG for turbo model
         if (modelInfo.type === 'turbo') {
             exaggerationGroup?.classList.add('hidden');
             cfgWeightGroup?.classList.add('hidden');
@@ -372,10 +409,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             cfgWeightGroup?.classList.remove('hidden');
         }
 
-        // Refresh presets to filter based on current model type
         populatePresets();
-
-        // Update language options based on model type
         updateLanguageOptions(modelInfo.type);
 
         console.log('Model UI updated:', modelInfo);
@@ -388,23 +422,18 @@ document.addEventListener('DOMContentLoaded', async function () {
         const isMultilingual = modelType === 'multilingual';
         const languages = isMultilingual ? LANGUAGES_MULTILINGUAL : LANGUAGES_ENGLISH_ONLY;
 
-        // Save current selection before switching away from Multilingual
         if (!isMultilingual && currentValue && currentValue !== 'en') {
             lastMultilingualLanguage = currentValue;
         }
 
-        // Show/hide language selector based on model type
-        // Only show for multilingual model (or if config says to show it)
         if (isMultilingual) {
             languageSelectContainer.classList.remove('hidden');
         } else {
             languageSelectContainer.classList.add('hidden');
         }
 
-        // Clear existing options
         languageSelect.innerHTML = '';
 
-        // Populate with appropriate languages
         languages.forEach(lang => {
             const option = document.createElement('option');
             option.value = lang.code;
@@ -412,9 +441,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             languageSelect.appendChild(option);
         });
 
-        // Restore appropriate selection
         if (isMultilingual) {
-            // Restore last Multilingual language selection
             languageSelect.value = lastMultilingualLanguage;
         } else {
             languageSelect.value = 'en';
@@ -429,7 +456,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         const textBefore = textArea.value.substring(0, startPos);
         const textAfter = textArea.value.substring(endPos);
 
-        // Insert tag with a space after if not at end and next char isn't a space
         let insertText = tag;
         if (textAfter.length > 0 && textAfter[0] !== ' ') {
             insertText = tag + ' ';
@@ -437,17 +463,14 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         textArea.value = textBefore + insertText + textAfter;
 
-        // Update cursor position to after the inserted tag
         const newCursorPos = startPos + insertText.length;
         textArea.setSelectionRange(newCursorPos, newCursorPos);
         textArea.focus();
 
-        // Update character count
         if (charCount) {
             charCount.textContent = textArea.value.length;
         }
 
-        // Trigger state save
         debouncedSaveState();
     }
 
@@ -465,12 +488,10 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (newSelector !== currentSelector) {
             modelChangesPending = true;
 
-            // Show the apply button
             if (applyModelBtn) {
                 applyModelBtn.classList.remove('hidden');
             }
 
-            // Update status indicator and text to show pending state
             if (modelStatusIndicator) {
                 modelStatusIndicator.className = 'status-dot warning';
             }
@@ -481,12 +502,10 @@ document.addEventListener('DOMContentLoaded', async function () {
         } else {
             modelChangesPending = false;
 
-            // Hide the apply button
             if (applyModelBtn) {
                 applyModelBtn.classList.add('hidden');
             }
 
-            // Restore status from current model info
             updateModelUI(currentModelInfo);
         }
     }
@@ -497,7 +516,6 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         const newSelector = modelSelect.value;
 
-        // Update status
         if (modelStatusText) {
             modelStatusText.textContent = 'Saving configuration...';
         }
@@ -513,7 +531,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
 
         try {
-            // Save the model selector to config
             const response = await fetch(`${API_BASE_URL}/save_settings`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -531,7 +548,6 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             showNotification('Model configuration saved. Initiating server restart...', 'info');
 
-            // Trigger server restart
             const restartResponse = await fetch(`${API_BASE_URL}/restart_server`, {
                 method: 'POST'
             });
@@ -543,7 +559,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                     10000
                 );
 
-                // Attempt to reload after delay
                 setTimeout(() => {
                     window.location.reload();
                 }, 5000);
@@ -559,7 +574,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             console.error('Error applying model change:', error);
             showNotification(`Error: ${error.message}`, 'error');
 
-            // Re-enable button
             if (applyModelBtn) {
                 applyModelBtn.disabled = false;
                 applyModelBtn.innerHTML = `
@@ -589,7 +603,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (languageSelectContainer && currentConfig?.ui?.show_language_select === false) {
             languageSelectContainer.classList.add('hidden');
         }
-        updateSpeedFactorWarning(); // Initial check for speed factor warning
+        updateSpeedFactorWarning(); 
         const initialGenResult = currentConfig.initial_gen_result;
         if (initialGenResult && initialGenResult.outputUrl) {
             initializeWaveSurfer(initialGenResult.outputUrl, initialGenResult);
@@ -613,7 +627,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             hideGenerationWarning = currentUiState.hide_generation_warning || false;
             currentVoiceMode = currentUiState.last_voice_mode || 'predefined';
 
-            // NEW: Handle model info from initial data
             if (data.model_info) {
                 updateModelUI(data.model_info);
             }
@@ -627,16 +640,13 @@ document.addEventListener('DOMContentLoaded', async function () {
                 currentConfig = { ui: { title: "Chatterbox TTS Server (Error Mode)" }, generation_defaults: {}, ui_state: {} };
                 currentUiState = currentConfig.ui_state;
             }
-            initializeApplication(); // Attempt to init in a degraded state
+            initializeApplication(); 
         } finally {
-            // --- PHASE 2: Attach listeners and enable UI readiness ---
-            // This pushes the listener attachment to the end of the event queue,
-            // ensuring all initialization events have fired harmlessly before we start listening.
             setTimeout(() => {
                 attachStateSavingListeners();
                 listenersAttached = true;
                 uiReady = true;
-            }, 50); // A 50ms delay is more robust than 0ms for complex UIs.
+            }, 50); 
         }
     }
 
@@ -646,12 +656,10 @@ document.addEventListener('DOMContentLoaded', async function () {
             if (charCount) charCount.textContent = textArea.value.length;
         }
 
-        // Handle Voice Mode Selection
         const modeRadioToSelect = document.querySelector(`input[name="voice_mode"][value="${currentVoiceMode}"]`);
 
         if (modeRadioToSelect) {
             modeRadioToSelect.checked = true;
-            // FIX: Manually fire the change event so the .selected class updates visually
             modeRadioToSelect.dispatchEvent(new Event('change'));
         } else {
             const defaultRadio = document.querySelector('input[name="voice_mode"][value="predefined"]');
@@ -688,27 +696,18 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (hideChunkWarningCheckbox) hideChunkWarningCheckbox.checked = hideChunkWarning;
         if (hideGenerationWarningCheckbox) hideGenerationWarningCheckbox.checked = hideGenerationWarning;
 
-        // --- PRESET RESTORATION LOGIC ---
-
-        // 1. Restore the name from state variable
         if (currentUiState.last_preset_name) {
             currentPresetName = currentUiState.last_preset_name;
         }
 
-        // 2. Logic to apply preset (if empty) OR just highlight button (if text exists)
         if (textArea && !textArea.value && appPresets && appPresets.length > 0) {
-            // Case A: No text entered. We want to load a preset fully.
-            // Priority: Saved preset > "Standard Narration" > First available
             const savedPreset = appPresets.find(p => p.name === currentPresetName);
             const defaultPreset = savedPreset || appPresets.find(p => p.name === "Standard Narration") || appPresets[0];
 
             if (defaultPreset) {
-                // Apply values AND visuals, no notification, no save
                 applyPreset(defaultPreset, false, false);
             }
         } else if (currentPresetName) {
-            // Case B: Text already exists (restored from last_text). 
-            // We don't want to overwrite parameters, but we want to show which preset button was active.
             updatePresetVisuals(currentPresetName);
         }
     }
@@ -734,7 +733,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 const valueDisplay = document.getElementById(valueDisplayId);
                 slider.addEventListener('input', () => {
                     if (valueDisplay) valueDisplay.textContent = slider.value;
-                    if (slider.id === 'speed-factor') updateSpeedFactorWarning(); // Update warning on input
+                    if (slider.id === 'speed-factor') updateSpeedFactorWarning(); 
                 });
                 slider.addEventListener('change', debouncedSaveState);
             }
@@ -742,7 +741,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (languageSelect) languageSelect.addEventListener('change', debouncedSaveState);
         if (outputFormatSelect) outputFormatSelect.addEventListener('change', debouncedSaveState);
 
-        // NEW: Model management listeners
         if (modelSelect) {
             modelSelect.addEventListener('change', handleModelSelectChange);
         }
@@ -751,7 +749,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             applyModelBtn.addEventListener('click', applyModelChange);
         }
 
-        // NEW: Tag button listeners
         tagButtons.forEach(button => {
             button.addEventListener('click', (e) => {
                 const tag = e.currentTarget.getAttribute('data-tag');
@@ -762,7 +759,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         });
     }
 
-    // --- Dynamic UI Population ---
     function populatePredefinedVoices(voicesData = initialPredefinedVoices) {
         if (!predefinedVoiceSelect) return;
         const currentSelectedValue = predefinedVoiceSelect.value;
@@ -808,11 +804,8 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     function updatePresetVisuals(name) {
         currentPresetName = name;
-
-        // Find all preset buttons
         const buttons = document.querySelectorAll('.preset-btn');
         buttons.forEach(btn => {
-            // We will add data-name to buttons in the next step
             if (btn.dataset.name === name) {
                 btn.classList.add('selected');
             } else {
@@ -824,8 +817,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     function populatePresets() {
         if (!presetsContainer || !appPresets) return;
 
-        // Filter presets based on current model
-        // Hide "Turbo" presets when Chatterbox-Original is loaded
         let filteredPresets = appPresets;
         if (currentModelInfo && currentModelInfo.type !== 'turbo') {
             filteredPresets = appPresets.filter(preset =>
@@ -833,7 +824,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             );
         }
 
-        // Clear container
         presetsContainer.innerHTML = '';
 
         if (filteredPresets.length === 0) {
@@ -914,7 +904,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
-    // --- Voice Mode and Options Visibility ---
     function toggleVoiceOptionsDisplay() {
         const selectedMode = document.querySelector('input[name="voice_mode"]:checked')?.value;
         currentVoiceMode = selectedMode;
@@ -932,34 +921,35 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
     if (splitTextToggle) toggleChunkControlsVisibility();
 
-    // --- Audio Player (WaveSurfer) ---
     function initializeWaveSurfer(audioUrl, resultDetails = {}) {
         if (wavesurfer) {
-            wavesurfer.unAll(); // Remove all event listeners before destroying
+            wavesurfer.unAll();
             wavesurfer.destroy();
             wavesurfer = null;
         }
-        if (currentAudioBlobUrl) {
+        if (currentAudioBlobUrl && !resultDetails.isStreaming) {
             URL.revokeObjectURL(currentAudioBlobUrl);
             currentAudioBlobUrl = null;
         }
-        currentAudioBlobUrl = audioUrl;
+        
+        const isStreaming = resultDetails.isStreaming || false;
 
-        // Ensure the container is clean or re-created
         audioPlayerContainer.innerHTML = `
             <div class="card audio-player">
                 <div class="card__body">
-                    <h2 class="card__title">Generated Audio</h2>
-                    <div class="audio-player__waveform" id="waveform"></div>
+                    <h2 class="card__title">${isStreaming ? 'Streaming Audio...' : 'Generated Audio'}</h2>
+                    <div class="audio-player__waveform" id="waveform">
+                        ${isStreaming ? '<canvas id="stream-canvas" style="width: 100%; height: 80px;"></canvas>' : ''}
+                    </div>
                     <div class="audio-player__controls">
                         <div class="audio-player__buttons">
-                            <button id="play-btn" class="btn primary" disabled>
+                            <button id="play-btn" class="btn primary" ${isStreaming ? '' : 'disabled'}>
                                 <svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" />
+                                    <path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Zm4 0a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" />
                                 </svg>
-                                <span>Play</span>
+                                <span>${isStreaming ? 'Pause' : 'Play'}</span>
                             </button>
-                            <a id="download-link" href="#" download="tts_output.wav" class="btn secondary disabled">
+                            <a id="download-link" href="#" download="tts_output.wav" class="btn secondary ${isStreaming ? 'disabled' : 'disabled'}">
                                 <svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                     <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z"/>
                                     <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z"/>
@@ -968,85 +958,101 @@ document.addEventListener('DOMContentLoaded', async function () {
                             </a>
                         </div>
                         <div class="audio-player__info">
-                            Mode: <span id="player-voice-mode" class="text-primary">--</span>
-                            <span id="player-voice-file-details"></span>
-                            <span class="separator">•</span> Gen Time: <span id="player-gen-time" class="tabular-nums">--s</span>
+                            Mode: <span id="player-voice-mode" class="text-primary">${resultDetails.submittedVoiceMode || currentVoiceMode}</span>
+                            <span class="separator">•</span> Gen Time: <span id="player-gen-time" class="tabular-nums">${resultDetails.genTime || '--'}s</span>
                             <span class="separator">•</span> Duration: <span id="audio-duration" class="tabular-nums">--:--</span>
                         </div>
                     </div>
                 </div>
             </div>`;
 
-        // Re-select elements after recreating them
-        const waveformDiv = audioPlayerContainer.querySelector('#waveform');
         const playBtn = audioPlayerContainer.querySelector('#play-btn');
         const downloadLink = audioPlayerContainer.querySelector('#download-link');
-        const playerModeSpan = audioPlayerContainer.querySelector('#player-voice-mode');
-        const playerFileSpan = audioPlayerContainer.querySelector('#player-voice-file-details');
-        const playerGenTimeSpan = audioPlayerContainer.querySelector('#player-gen-time');
         const audioDurationSpan = audioPlayerContainer.querySelector('#audio-duration');
 
-        const audioFilename = resultDetails.filename || (typeof audioUrl === 'string' ? audioUrl.split('/').pop() : 'tts_output.wav');
-        if (downloadLink) {
-            downloadLink.href = audioUrl;
-            downloadLink.download = audioFilename;
-            const downloadTextSpan = downloadLink.querySelector('span'); // Target the span for text update
-            if (downloadTextSpan) {
-                downloadTextSpan.textContent = `Download ${audioFilename.split('.').pop().toUpperCase()}`;
-            }
-        }
-        if (playerModeSpan) playerModeSpan.textContent = resultDetails.submittedVoiceMode || currentVoiceMode || '--';
-        if (playerFileSpan) {
-            let fileDetail = '';
-            if ((resultDetails.submittedVoiceMode || currentVoiceMode) === 'clone' && resultDetails.submittedCloneFile) {
-                fileDetail = `(<span class="font-medium text-slate-700 dark:text-slate-300">${resultDetails.submittedCloneFile}</span>)`;
-            } else if ((resultDetails.submittedVoiceMode || currentVoiceMode) === 'predefined' && resultDetails.submittedPredefinedVoice) {
-                fileDetail = `(<span class="font-medium text-slate-700 dark:text-slate-300">${resultDetails.submittedPredefinedVoice}</span>)`;
-            }
-            playerFileSpan.innerHTML = fileDetail;
-        }
-        if (playerGenTimeSpan) playerGenTimeSpan.textContent = resultDetails.genTime ? `${resultDetails.genTime}s` : '--s';
+        const playIcon = `<svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg><span>Play</span>`;
+        const pauseIcon = `<svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Zm4 0a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" /></svg><span>Pause</span>`;
 
-        const playIconSVG = `<svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg><span>Play</span>`;
-        const pauseIconSVG = `<svg class="btn__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Zm4 0a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" /></svg><span>Pause</span>`;
+        if (isStreaming) {
+            playBtn.onclick = () => {
+                if (audioCtx.state === 'running') {
+                    audioCtx.suspend();
+                    playBtn.innerHTML = playIcon;
+                } else {
+                    audioCtx.resume();
+                    playBtn.innerHTML = pauseIcon;
+                }
+            };
+            return; // Don't init Wavesurfer yet
+        }
+
+        // Standard Init for completed audio
         const isDark = document.documentElement.classList.contains('dark');
-
         wavesurfer = WaveSurfer.create({
-            container: waveformDiv, waveColor: isDark ? '#6366f1' : '#a5b4fc', progressColor: isDark ? '#4f46e5' : '#6366f1',
-            cursorColor: isDark ? '#cbd5e1' : '#475569', barWidth: 3, barRadius: 3, cursorWidth: 1, height: 80, barGap: 2,
-            responsive: true, url: audioUrl, mediaControls: false, normalize: true,
+            container: '#waveform',
+            waveColor: isDark ? '#6366f1' : '#a5b4fc',
+            progressColor: isDark ? '#4f46e5' : '#6366f1',
+            cursorColor: isDark ? '#cbd5e1' : '#475569',
+            barWidth: 3,
+            barRadius: 3,
+            height: 80,
+            responsive: true,
+            url: audioUrl,
+            normalize: true,
         });
 
         wavesurfer.on('ready', () => {
             const duration = wavesurfer.getDuration();
             if (audioDurationSpan) audioDurationSpan.textContent = formatTime(duration);
-            if (playBtn) {
-                playBtn.disabled = false;
-                playBtn.innerHTML = playIconSVG;
-            }
-            if (downloadLink) {
-                downloadLink.classList.remove('disabled');
-                downloadLink.removeAttribute('aria-disabled');
-            }
-        });
-        wavesurfer.on('play', () => { if (playBtn) playBtn.innerHTML = pauseIconSVG; });
-        wavesurfer.on('pause', () => { if (playBtn) playBtn.innerHTML = playIconSVG; });
-        wavesurfer.on('finish', () => { if (playBtn) playBtn.innerHTML = playIconSVG; wavesurfer.seekTo(0); });
-        wavesurfer.on('error', (err) => {
-            console.error("WaveSurfer error:", err);
-            showNotification(`Error loading audio waveform: ${err.message || err}`, 'error');
-            if (waveformDiv) waveformDiv.innerHTML = `<p class="p-4 text-sm text-red-600 dark:text-red-400">Could not load waveform.</p>`;
-            if (playBtn) playBtn.disabled = true;
+            playBtn.disabled = false;
+            playBtn.innerHTML = playIcon;
+            downloadLink.classList.remove('disabled');
+            downloadLink.href = audioUrl;
         });
 
-        if (playBtn) {
-            playBtn.onclick = () => {
-                if (wavesurfer) {
-                    wavesurfer.playPause();
-                }
-            };
-        }
+        wavesurfer.on('play', () => { playBtn.innerHTML = pauseIcon; });
+        wavesurfer.on('pause', () => { playBtn.innerHTML = playIcon; });
+        wavesurfer.on('finish', () => { playBtn.innerHTML = playIcon; wavesurfer.seekTo(0); });
+
+        playBtn.onclick = () => wavesurfer.playPause();
+        
         setTimeout(() => audioPlayerContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 150);
+    }
+
+    function streamAudio(arrayBuffer, sampleRate = 24000) {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: sampleRate
+            });
+            audioNextStartTime = audioCtx.currentTime;
+
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256; // Smaller for a "bar" look or 2048 for smooth
+        } else if (audioCtx.state === 'suspended') {
+            // Context stays suspended if user pressed pause
+        }
+
+        const int16Data = new Int16Array(arrayBuffer);
+        const float32Data = new Float32Array(int16Data.length);
+
+        for (let i = 0; i < int16Data.length; i++) {
+            float32Data[i] = int16Data[i] < 0 ? int16Data[i] / 32768 : int16Data[i] / 32767;
+        }
+
+        const audioBuffer = audioCtx.createBuffer(1, float32Data.length, sampleRate);
+        audioBuffer.copyToChannel(float32Data, 0, 0);
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+
+        // Contiguous scheduling
+        const start = Math.max(audioNextStartTime, audioCtx.currentTime);
+        source.start(start);
+
+        audioNextStartTime = start + audioBuffer.duration;
     }
 
     // --- TTS Generation Logic ---
@@ -1062,7 +1068,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             voice_mode: currentVoiceMode,
             split_text: splitTextToggle.checked,
             chunk_size: parseInt(chunkSizeSlider.value, 10),
-            output_format: outputFormatSelect.value || 'mp3'
+            output_format: 'wav'
         };
         if (currentVoiceMode === 'predefined' && predefinedVoiceSelect.value !== 'none') {
             jsonData.predefined_voice_id = predefinedVoiceSelect.value;
@@ -1073,37 +1079,154 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     async function submitTTSRequest() {
+        const streamToggle = document.getElementById('stream-audio-toggle');
+        const useStreaming = streamToggle ? streamToggle.checked : false;
+
         isGenerating = true;
+        
+        if (audioCtx) { 
+            audioCtx.close(); 
+            audioCtx = null; 
+        }
+        analyser = null;
+        if (visualizerAnimationId) cancelAnimationFrame(visualizerAnimationId);
+        leftoverChunkBytes = new Uint8Array(0);
+        audioNextStartTime = 0;
+
         showLoadingOverlay();
         const startTime = performance.now();
         const jsonData = getTTSFormData();
+        
+        let fullAudioParts = []; 
+
         try {
-            const response = await fetch(`${API_BASE_URL}/tts`, {
+            const endpoint = useStreaming ? '/tts/stream' : '/tts';
+            
+            if (useStreaming) {
+                // Initialize player UI immediately in "Live" mode
+                initializeWaveSurfer(null, { 
+                    isStreaming: true,
+                    submittedVoiceMode: jsonData.voice_mode 
+                });
+                
+                const canvas = document.getElementById('stream-canvas');
+                if (canvas) {
+                    canvas.width = canvas.parentElement.offsetWidth;
+                    canvas.height = 80;
+                }
+            }
+
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(jsonData)
             });
+
             if (!response.ok) {
                 const errorResult = await response.json().catch(() => ({ detail: `HTTP error ${response.status}` }));
                 throw new Error(errorResult.detail || 'TTS generation failed.');
             }
-            const audioBlob = await response.blob();
-            const endTime = performance.now();
-            const genTime = ((endTime - startTime) / 1000).toFixed(2);
-            const filenameFromServer = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'generated_audio.wav';
-            const resultDetails = {
-                outputUrl: URL.createObjectURL(audioBlob), filename: filenameFromServer, genTime: genTime,
-                submittedVoiceMode: jsonData.voice_mode, submittedPredefinedVoice: jsonData.predefined_voice_id,
-                submittedCloneFile: jsonData.reference_audio_filename
-            };
-            initializeWaveSurfer(resultDetails.outputUrl, resultDetails);
-            showNotification('Audio generated successfully!', 'success');
+
+            if (useStreaming) {
+                const reader = response.body.getReader();
+                let receivedFirstByte = false;
+                let wavHeaderRemoved = false;
+                let sampleRate = 24000; 
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    if (!receivedFirstByte) {
+                        receivedFirstByte = true;
+                        hideLoadingOverlay();
+                        const canvas = document.getElementById('stream-canvas');
+                        if (canvas) visualizeStream(canvas);
+                    }
+
+                    // Byte-alignment protection (Fixes static/gibberish)
+                    const combinedBuffer = new Uint8Array(leftoverChunkBytes.length + value.length);
+                    combinedBuffer.set(leftoverChunkBytes);
+                    combinedBuffer.set(value, leftoverChunkBytes.length);
+
+                    const remainder = combinedBuffer.length % 2;
+                    let chunkToProcess = combinedBuffer;
+
+                    if (remainder !== 0) {
+                        chunkToProcess = combinedBuffer.slice(0, combinedBuffer.length - 1);
+                        leftoverChunkBytes = combinedBuffer.slice(combinedBuffer.length - 1);
+                    } else {
+                        leftoverChunkBytes = new Uint8Array(0);
+                    }
+
+                    fullAudioParts.push(value); 
+
+                    let audioDataForCtx = chunkToProcess;
+
+                    if (!wavHeaderRemoved && audioDataForCtx.length >= 44) {
+                        const view = new DataView(audioDataForCtx.buffer, audioDataForCtx.byteOffset, audioDataForCtx.byteLength);
+                        sampleRate = view.getUint32(24, true);
+                        audioDataForCtx = audioDataForCtx.slice(44);
+                        wavHeaderRemoved = true;
+                    } else if (!wavHeaderRemoved) {
+                        continue;
+                    }
+
+                    if (audioDataForCtx.length > 0) {
+                        streamAudio(audioDataForCtx.buffer, sampleRate);
+                    }
+                }
+                
+                if (visualizerAnimationId) cancelAnimationFrame(visualizerAnimationId);
+
+                // Convert accumulated stream to permanent blob for standard player
+                const blob = new Blob(fullAudioParts, { type: 'audio/wav' });
+                const endTime = performance.now();
+                const genTime = ((endTime - startTime) / 1000).toFixed(2);
+                
+                const resultDetails = {
+                    outputUrl: URL.createObjectURL(blob),
+                    filename: `tts_stream_${Date.now()}.wav`,
+                    genTime: genTime,
+                    submittedVoiceMode: jsonData.voice_mode,
+                    submittedPredefinedVoice: jsonData.predefined_voice_id,
+                    submittedCloneFile: jsonData.reference_audio_filename
+                };
+                
+                // Swap the Live canvas for a real Wavesurfer waveform
+                initializeWaveSurfer(resultDetails.outputUrl, resultDetails);
+                showNotification('Stream completed successfully!', 'success', 2000);
+
+            } else {
+                // ... Existing Batch Logic ...
+                const audioBlob = await response.blob();
+                const endTime = performance.now();
+                const genTime = ((endTime - startTime) / 1000).toFixed(2);
+                const filenameFromServer = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'generated_audio.wav';
+                
+                const resultDetails = {
+                    outputUrl: URL.createObjectURL(audioBlob),
+                    filename: filenameFromServer,
+                    genTime: genTime,
+                    submittedVoiceMode: jsonData.voice_mode,
+                    submittedPredefinedVoice: jsonData.predefined_voice_id,
+                    submittedCloneFile: jsonData.reference_audio_filename
+                };
+                initializeWaveSurfer(resultDetails.outputUrl, resultDetails);
+                showNotification('Audio generated successfully!', 'success');
+                hideLoadingOverlay();
+            }
+
         } catch (error) {
             console.error('TTS Generation Error:', error);
-            showNotification(error.message || 'An unknown error occurred during TTS generation.', 'error');
+            showNotification(error.message || 'An unknown error occurred.', 'error');
+            hideLoadingOverlay();
+            if (visualizerAnimationId) cancelAnimationFrame(visualizerAnimationId);
+            if (audioPlayerContainer.innerHTML.includes('Streaming Audio')) {
+                 audioPlayerContainer.innerHTML = ''; 
+            }
         } finally {
             isGenerating = false;
-            hideLoadingOverlay();
         }
     }
 
@@ -1118,17 +1241,12 @@ document.addEventListener('DOMContentLoaded', async function () {
         submitTTSRequest();
     }
 
-    // --- Attach main generation event to the button's CLICK, not the form's SUBMIT ---
-    // This is a more robust method that prevents accidental submissions during page load.
     if (generateBtn) {
         generateBtn.addEventListener('click', function (event) {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
 
-            console.log('Generate button clicked!');
-            console.log('Current voice mode:', currentVoiceMode);
-            console.log('Is generating:', isGenerating);
-            console.log('Text content:', textArea ? textArea.value.trim() : 'NO TEXTAREA');
-
-            // We still prevent default in case the button has any default browser actions.
             event.preventDefault();
 
             if (isGenerating) {
@@ -1149,17 +1267,13 @@ document.addEventListener('DOMContentLoaded', async function () {
                 return;
             }
 
-            // Check for the generation quality warning.
             if (!hideGenerationWarning) {
                 showGenerationWarningModal();
-                return; // Stop here and let the modal handler take over.
+                return; 
             }
 
-            // If the warning is hidden, proceed to the final checks.
             proceedWithSubmissionChecks();
         });
-    } else {
-        console.log('Generate button not found!');
     }
 
     // --- Modal Handling ---
@@ -1209,10 +1323,11 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
     function showLoadingOverlay() {
         if (loadingOverlay && generateBtn && loadingCancelBtn) {
-            loadingMessage.textContent = 'Generating audio...';
-            loadingStatusText.textContent = 'Please wait. This may take some time.';
+            loadingMessage.textContent = 'Generating...';
+            loadingStatusText.textContent = 'Waiting for stream to start...';
             loadingOverlay.style.display = 'flex';
-            loadingOverlay.classList.remove('hidden', 'opacity-0'); loadingOverlay.dataset.state = 'open';
+            loadingOverlay.classList.remove('hidden', 'opacity-0'); 
+            loadingOverlay.dataset.state = 'open';
             generateBtn.disabled = true; loadingCancelBtn.disabled = false;
         }
     }
@@ -1231,11 +1346,16 @@ document.addEventListener('DOMContentLoaded', async function () {
     function displayServerConfiguration() {
         if (!serverConfigForm || !currentConfig || Object.keys(currentConfig).length === 0) return;
         const fieldsToDisplay = {
-            "server.host": currentConfig.server?.host, "server.port": currentConfig.server?.port,
-            "tts_engine.device": currentConfig.tts_engine?.device, "tts_engine.default_voice_id": currentConfig.tts_engine?.default_voice_id,
-            "paths.model_cache": currentConfig.paths?.model_cache, "tts_engine.predefined_voices_path": currentConfig.tts_engine?.predefined_voices_path,
-            "tts_engine.reference_audio_path": currentConfig.tts_engine?.reference_audio_path, "paths.output": currentConfig.paths?.output,
-            "audio_output.format": currentConfig.audio_output?.format, "audio_output.sample_rate": currentConfig.audio_output?.sample_rate
+            "server.host": currentConfig.server?.host, 
+            "server.port": currentConfig.server?.port,
+            "tts_engine.device": currentConfig.tts_engine?.device, 
+            "tts_engine.default_voice_id": currentConfig.tts_engine?.default_voice_id,
+            "paths.model_cache": currentConfig.paths?.model_cache, 
+            "tts_engine.predefined_voices_path": currentConfig.tts_engine?.predefined_voices_path,
+            "tts_engine.reference_audio_path": currentConfig.tts_engine?.reference_audio_path, 
+            "paths.output": currentConfig.paths?.output,
+            "audio_output.format": currentConfig.audio_output?.format, 
+            "audio_output.sample_rate": currentConfig.audio_output?.sample_rate
         };
         for (const name in fieldsToDisplay) {
             const input = serverConfigForm.querySelector(`input[name="${name}"]`);
@@ -1368,7 +1488,12 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (!files || files.length === 0) return;
         const originalButtonHTML = buttonToAnimate ? buttonToAnimate.innerHTML : '';
         if (buttonToAnimate) {
-            buttonToAnimate.innerHTML = `<svg class="animate-spin h-5 w-5 mr-1.5 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Uploading...`;
+            buttonToAnimate.innerHTML = `
+                <svg class="animate-spin h-5 w-5 mr-1.5 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Uploading...`;
             buttonToAnimate.disabled = true;
         }
         const uploadNotification = showNotification(`Uploading ${files.length} file(s)...`, 'info', 0);
@@ -1476,7 +1601,5 @@ document.addEventListener('DOMContentLoaded', async function () {
         });
     }
 
-    // Call fetchInitialData at the end of setup to kick everything off.
-    // Note: This calls initializeApplication internally.
     await fetchInitialData();
 });
