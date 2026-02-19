@@ -168,6 +168,13 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     // --- Utility Functions ---
+    function formatErrorDetail(detail) {
+        if (typeof detail === 'string') return detail;
+        if (Array.isArray(detail)) return detail.map(e => e.msg || JSON.stringify(e)).join('; ');
+        if (detail && typeof detail === 'object') return JSON.stringify(detail);
+        return String(detail);
+    }
+
     function showNotification(message, type = 'info', duration = 5000) {
         if (!notificationArea) return null;
 
@@ -270,7 +277,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             });
             if (!response.ok) {
                 const errorResult = await response.json();
-                throw new Error(errorResult.detail || `Failed to save UI state (status ${response.status})`);
+                throw new Error(formatErrorDetail(errorResult.detail) || `Failed to save UI state (status ${response.status})`);
             }
         } catch (error) {
             console.error("Error saving UI state via API:", error);
@@ -526,7 +533,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             if (!response.ok) {
                 const errorResult = await response.json().catch(() => ({ detail: 'Failed to save' }));
-                throw new Error(errorResult.detail || 'Failed to save model configuration');
+                throw new Error(formatErrorDetail(errorResult.detail) || 'Failed to save model configuration');
             }
 
             showNotification('Model configuration saved. Initiating server restart...', 'info');
@@ -1085,7 +1092,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             });
             if (!response.ok) {
                 const errorResult = await response.json().catch(() => ({ detail: `HTTP error ${response.status}` }));
-                throw new Error(errorResult.detail || 'TTS generation failed.');
+                throw new Error(formatErrorDetail(errorResult.detail) || 'TTS generation failed.');
             }
             const audioBlob = await response.blob();
             const endTime = performance.now();
@@ -1331,7 +1338,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 });
                 if (!response.ok) {
                     const errorResult = await response.json().catch(() => ({ detail: 'Failed to reset settings on server.' }));
-                    throw new Error(errorResult.detail);
+                    throw new Error(formatErrorDetail(errorResult.detail));
                 }
                 const result = await response.json();
                 updateConfigStatus(resetSettingsBtn, configStatus, result.message + " Reloading page...", 'success', 0, false);
