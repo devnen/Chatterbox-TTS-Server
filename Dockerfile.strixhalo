@@ -28,13 +28,13 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 WORKDIR /app
 
 # Copy requirements first to leverage Docker cache
-COPY requirements-rocm-init.txt ./requirements-rocm-init.txt
-COPY requirements-rocm.txt ./requirements-rocm.txt
+COPY requirements-strixhalo-init.txt ./requirements-strixhalo-init.txt
+COPY requirements-strixhalo.txt ./requirements-strixhalo.txt
 
 # Upgrade pip and install Python dependencies
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r requirements-rocm.txt && \
-    python3 -m pip install --no-cache-dir --force-reinstall -r requirements-rocm-init.txt
+    pip3 install --no-cache-dir -r requirements-strixhalo.txt && \
+    python3 -m pip install --no-cache-dir --force-reinstall -r requirements-strixhalo-init.txt
 
 # Patch s3tokenizer dtype issues for torch 2.9+ compatibility:
 # 1. Cast numpy wav to float32 in _prepare_audio (numpy defaults to float64)
