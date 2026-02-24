@@ -1,0 +1,65 @@
+FROM rocm/dev-ubuntu-22.04:latest
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+# Set the Hugging Face home directory for better model caching
+ENV HF_HOME=/app/hf_cache
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libsndfile1 \
+    ffmpeg \
+    python3 \
+    python3-pip \
+    python3-dev \
+    python3-venv \
+    git \
+    rocm-ml-libraries \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a symlink for python3 to be python for convenience
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# Set up working directory
+WORKDIR /app
+
+# Copy requirements first to leverage Docker cache
+COPY requirements-rocm-init.txt ./requirements-rocm-init.txt
+COPY requirements-rocm.txt ./requirements-rocm.txt
+
+# Upgrade pip and install Python dependencies
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements-rocm.txt && \
+    python3 -m pip install --no-cache-dir --force-reinstall -r requirements-rocm-init.txt
+
+# Patch s3tokenizer dtype issues for torch 2.9+ compatibility:
+# 1. Cast numpy wav to float32 in _prepare_audio (numpy defaults to float64)
+#    This fixes the cascade: float64 wav → float64 STFT → float64 mel → assertion failure
+# 2. Cast _mel_filters to match magnitudes dtype (guards against float64 checkpoint weights)
+RUN sed -i \
+    's/wav = torch\.from_numpy(wav)$/wav = torch.from_numpy(wav).float()/' \
+    /usr/local/lib/python3.10/dist-packages/chatterbox/models/s3tokenizer/s3tokenizer.py && \
+    sed -i \
+    's/mel_spec = self\._mel_filters\.to(self\.device) @ magnitudes/mel_spec = self._mel_filters.to(self.device).to(magnitudes.dtype) @ magnitudes/' \
+    /usr/local/lib/python3.10/dist-packages/chatterbox/models/s3tokenizer/s3tokenizer.py
+
+# Patch voice_encoder dtype issue: melspectrogram() returns numpy float64 → LSTM requires float32
+RUN sed -i \
+    's/utt_embeds = self\.inference(mels\.to(self\.device),/utt_embeds = self.inference(mels.to(self.device).float(),/' \
+    /usr/local/lib/python3.10/dist-packages/chatterbox/models/voice_encoder/voice_encoder.py
+
+# Copy the rest of the application code
+COPY . .
+
+# Create required directories for the application (fixed syntax error)
+RUN mkdir -p model_cache reference_audio outputs voices logs hf_cache
+
+# Expose the port the application will run on
+EXPOSE 8004
+
+# Command to run the application
+CMD ["python3", "server.py"]
