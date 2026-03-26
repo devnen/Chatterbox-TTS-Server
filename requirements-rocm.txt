@@ -9,21 +9,22 @@
 # For manual installation, run these commands in order:
 #   pip install -r requirements-rocm-init.txt
 #   pip install -r requirements-rocm.txt
-#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
 #
 # The --no-deps flag on chatterbox-tts is critical: without it, pip will
 # replace the ROCm torch wheels with CPU-only versions from PyPI.
 
 # Chatterbox Dependencies (explicit, since --no-deps skips them)
+# NOTE: s3tokenizer and onnx are installed with --no-deps alongside chatterbox
+# to avoid protobuf version conflicts (onnx requires protobuf>=3.20.2 but
+# descript-audiotools requires protobuf<3.20).
 conformer==0.3.2
 diffusers==0.29.0
 transformers==4.46.3
-s3tokenizer==0.3.0
 einops>=0.7.0
 omegaconf==2.3.0
 resampy==0.4.3
 resemble-perth==1.0.1
-onnx==1.16.0                    # Pinned to ensure pre-built wheel
 
 # Core Web Framework
 fastapi>=0.100.0,<0.116.0      # starlette<1.0 needed for TemplateResponse compat

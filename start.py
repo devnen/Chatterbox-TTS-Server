@@ -1498,12 +1498,12 @@ def install_chatterbox_no_deps(venv_pip):
         True on success, False on failure
     """
     print_substep(
-        "Installing Chatterbox TTS (--no-deps to preserve PyTorch build)..."
+        "Installing Chatterbox TTS, s3tokenizer, onnx (--no-deps to preserve PyTorch build)..."
     )
 
-    cmd = f'"{venv_pip}" install --no-deps {CHATTERBOX_REPO}'
+    cmd = f'"{venv_pip}" install --no-deps {CHATTERBOX_REPO} s3tokenizer==0.3.0 onnx==1.16.0'
 
-    success = run_command_with_progress(cmd, description="Installing Chatterbox TTS")
+    success = run_command_with_progress(cmd, description="Installing Chatterbox TTS + s3tokenizer + onnx")
 
     if success:
         print_substep("Chatterbox TTS installed", "done")

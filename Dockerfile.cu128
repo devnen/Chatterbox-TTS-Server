@@ -35,7 +35,7 @@ COPY requirements-nvidia-cu128.txt ./requirements-nvidia-cu128.txt
 # 2. Chatterbox with --no-deps to prevent pip from downgrading torch
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir -r requirements-nvidia-cu128.txt && \
-    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
 
 # Copy the rest of the application code
 COPY . .

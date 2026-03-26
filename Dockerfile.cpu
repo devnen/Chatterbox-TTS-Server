@@ -27,7 +27,7 @@ COPY requirements.txt ./requirements.txt
 # 2. Chatterbox with --no-deps to prevent pip from pulling conflicting versions
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir -r requirements.txt && \
-    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
 
 # Copy the rest of the application code
 COPY . .
