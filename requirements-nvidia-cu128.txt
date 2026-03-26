@@ -25,6 +25,15 @@ torch==2.9.0
 torchvision==0.24.0
 torchaudio==2.9.0
 
+# --- Chatterbox Dependencies (explicit, since --no-deps skips them) ---
+conformer==0.3.2
+diffusers==0.29.0
+transformers==4.46.3
+s3tokenizer
+omegaconf==2.3.0
+resampy==0.4.3
+onnx==1.16.0                    # Pinned to ensure pre-built wheel
+
 # --- Core Web Framework ---
 fastapi
 uvicorn[standard]

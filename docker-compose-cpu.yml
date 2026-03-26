@@ -1,13 +1,8 @@
-version: '3.8'
-
 services:
   chatterbox-tts-server:
     build:
       context: .
-      dockerfile: Dockerfile
-      args:
-        # This build argument ensures only CPU dependencies are installed
-        - RUNTIME=cpu
+      dockerfile: Dockerfile.cpu
     ports:
       - "${PORT:-8004}:8004"
     volumes:

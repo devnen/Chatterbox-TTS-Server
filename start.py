@@ -1545,11 +1545,11 @@ def perform_installation(venv_pip, install_type, root_dir):
     if not install_requirements(venv_pip, requirements_file, root_dir):
         return False
 
-    # Step 2: For CUDA 12.8 and ROCm, install chatterbox separately with
-    # --no-deps to prevent pip from replacing platform-specific torch wheels
-    if install_type in (INSTALL_NVIDIA_CU128, INSTALL_ROCM):
-        if not install_chatterbox_no_deps(venv_pip):
-            return False
+    # Step 2: Install chatterbox separately with --no-deps for ALL install types.
+    # This prevents pip from pulling in conflicting torch versions and avoids
+    # ONNX source build failures on platforms without pre-built wheels.
+    if not install_chatterbox_no_deps(venv_pip):
+        return False
 
     return True
 
@@ -1684,6 +1684,98 @@ def _patch_chatterbox_watermarker(env_dir, use_embedded):
         )
     elif VERBOSE_MODE:
         print_substep("No files needed watermarker patching", "info")
+
+
+def _patch_chatterbox_mps_float32(env_dir, use_embedded):
+    """
+    Patch installed chatterbox source files to force float32 dtype when moving
+    tensors to device. MPS (Apple Silicon) does not support float64, causing
+    'Cannot convert a MPS Tensor to float64 dtype' errors with the Turbo model.
+
+    This patch is only applied if the installed chatterbox code does NOT already
+    include the fix (i.e., if the upstream repo is used instead of the
+    chatterbox-v2 fork which has this fix built in).
+
+    This patch is idempotent: re-running it on already-patched files is safe.
+
+    Args:
+        env_dir: Path to environment directory (venv or python_embedded)
+        use_embedded: True if using embedded Python environment
+    """
+    # Locate site-packages
+    if use_embedded or is_windows():
+        site_packages = env_dir / "Lib" / "site-packages"
+    else:
+        lib_dir = env_dir / "lib"
+        site_packages = None
+        if lib_dir.exists():
+            for child in sorted(lib_dir.iterdir()):
+                if child.name.startswith("python3") and child.is_dir():
+                    candidate = child / "site-packages"
+                    if candidate.is_dir():
+                        site_packages = candidate
+                        break
+        if site_packages is None:
+            return
+
+    # Find chatterbox package directory
+    chatterbox_dir = None
+    for name in ["chatterbox", "chatterbox_tts"]:
+        candidate = site_packages / name
+        if candidate.is_dir():
+            chatterbox_dir = candidate
+            break
+
+    if chatterbox_dir is None:
+        return
+
+    SENTINEL = "# [patched by start.py: MPS float32 compatibility]"
+
+    # Patch 1: s3tokenizer.py — force float32 on .to(self.device) calls
+    s3tok_path = chatterbox_dir / "models" / "s3tokenizer" / "s3tokenizer.py"
+    if s3tok_path.exists():
+        try:
+            content = s3tok_path.read_text(encoding="utf-8")
+            if SENTINEL not in content:
+                patched = False
+                # Replace wav.to(self.device) with wav.to(self.device, dtype=torch.float32)
+                # but only the bare form (not already patched with dtype=)
+                old1 = "wav = wav.to(self.device)"
+                new1 = "wav = wav.to(self.device, dtype=torch.float32)"
+                if old1 in content and "wav = wav.to(self.device, dtype=" not in content:
+                    content = content.replace(old1, new1)
+                    patched = True
+
+                old2 = "audio = audio.to(self.device)"
+                new2 = "audio = audio.to(self.device, dtype=torch.float32)"
+                if old2 in content and "audio = audio.to(self.device, dtype=" not in content:
+                    content = content.replace(old2, new2)
+                    patched = True
+
+                if patched:
+                    content = SENTINEL + "\n" + content
+                    s3tok_path.write_text(content, encoding="utf-8")
+                    print_substep("s3tokenizer.py: MPS float32 fix applied", "done")
+        except Exception as e:
+            if VERBOSE_MODE:
+                print_substep(f"s3tokenizer.py: could not patch ({e})", "warning")
+
+    # Patch 2: voice_encoder.py — force float32 on mels.to(self.device)
+    ve_path = chatterbox_dir / "models" / "voice_encoder" / "voice_encoder.py"
+    if ve_path.exists():
+        try:
+            content = ve_path.read_text(encoding="utf-8")
+            if SENTINEL not in content:
+                old = "mels.to(self.device)"
+                new = "mels.to(self.device, dtype=torch.float32)"
+                if old in content and "mels.to(self.device, dtype=" not in content:
+                    content = content.replace(old, new)
+                    content = SENTINEL + "\n" + content
+                    ve_path.write_text(content, encoding="utf-8")
+                    print_substep("voice_encoder.py: MPS float32 fix applied", "done")
+        except Exception as e:
+            if VERBOSE_MODE:
+                print_substep(f"voice_encoder.py: could not patch ({e})", "warning")
 
 
 def verify_installation(venv_python):
@@ -2506,9 +2598,11 @@ def main():
             sys.exit(1)
 
         # Patch chatterbox to make watermarker gracefully optional
+        # and fix MPS float64 crash on Apple Silicon (if not already fixed in fork)
         print()
         print_substep("Applying post-install patches...")
         _patch_chatterbox_watermarker(venv_dir, use_embedded)
+        _patch_chatterbox_mps_float32(venv_dir, use_embedded)
 
         # Verify installation
         print()

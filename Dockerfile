@@ -31,15 +31,18 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 
-# Upgrade pip and install Python dependencies
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r requirements.txt
-# Conditionally install NVIDIA dependencies if RUNTIME is set to 'nvidia'
+# Install dependencies:
+# 1. Base requirements (CPU torch + all server deps + chatterbox deps)
+# 2. Conditionally install NVIDIA CUDA torch (overrides CPU torch)
+# 3. Chatterbox with --no-deps to prevent pip from pulling conflicting torch/onnx
 COPY requirements-nvidia.txt .
 
-RUN if [ "$RUNTIME" = "nvidia" ]; then \
-    pip3 install --no-cache-dir -r requirements-nvidia.txt; \
-    fi
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    if [ "$RUNTIME" = "nvidia" ]; then \
+        pip3 install --no-cache-dir -r requirements-nvidia.txt; \
+    fi && \
+    pip3 install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 # Copy the rest of the application code
 COPY . .
 

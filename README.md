@@ -10,7 +10,7 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 
 [![Project Link](https://img.shields.io/badge/GitHub-devnen/Chatterbox--TTS--Server-blue?style=for-the-badge&logo=github)](https://github.com/devnen/Chatterbox-TTS-Server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Python Version](https://img.shields.io/badge/Python-3.10+-blue.svg?style=for-the-badge)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/Python-3.10_(recommended)-blue.svg?style=for-the-badge)](https://www.python.org/downloads/release/python-31011/)
 [![Framework](https://img.shields.io/badge/Framework-FastAPI-green.svg?style=for-the-badge)](https://fastapi.tiangolo.com/)
 [![Model Source](https://img.shields.io/badge/Model-ResembleAI/chatterbox-orange.svg?style=for-the-badge)](https://github.com/resemble-ai/chatterbox)
 [![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg?style=for-the-badge)](https://www.docker.com/)
@@ -81,11 +81,16 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 
 **Switching models is effortless:** Simply select your preferred model from the engine selector dropdown at the top of the Web UI. No restarts, no configuration changes required—just instant hot-swapping to test quality, speed, and language support across the complete Chatterbox family.
 
-### 🖥️ Fixed NVIDIA Blackwell / CUDA 12.8 and AMD ROCm installation
+### 🖥️ Installation fixes across all platforms
 
+- **All platforms:** Chatterbox is now installed with `--no-deps` across all installation paths (CPU, NVIDIA, cu128, ROCm). This eliminates ONNX source build failures, torch version conflicts, and CMake errors that affected many users. Chatterbox's dependencies (conformer, diffusers, transformers, s3tokenizer, etc.) are now listed explicitly in each requirements file with `onnx==1.16.0` pinned to guarantee pre-built wheels.
+- **Apple Silicon / MPS:** Fixed Turbo model crash ("Cannot convert a MPS Tensor to float64 dtype") by forcing float32 in s3tokenizer and voice_encoder. Fix applied in the chatterbox-v2 fork and also as an automatic post-install patch in `start.py` for users of other chatterbox versions. Thanks to @jonas3245 (#93).
+- **Docker CPU:** New lightweight `Dockerfile.cpu` based on `python:3.10-slim` instead of the 4GB+ NVIDIA CUDA base image. `docker-compose-cpu.yml` now uses this smaller image. Removed deprecated `version` tags from all docker-compose files.
+- **config.yaml:** Default device changed from `cuda` to `auto` for correct auto-detection on all hardware (CUDA, MPS, CPU).
+- **Python version:** Clarified that **Python 3.10 is recommended**. Python 3.13+ is not supported due to missing wheels for torch and ONNX. The Windows launcher's Portable Mode handles this automatically.
 - **Blackwell (CUDA 12.8):** Fixed `requirements-nvidia-cu128.txt` to properly install PyTorch 2.9.0 with CUDA 12.8 (`sm_120` support) for RTX 5060 Ti, 5070, 5070 Ti, 5080, and 5090 GPUs. The `Dockerfile.cu128` now correctly installs chatterbox with `--no-deps` to prevent PyTorch downgrade.
 - **AMD ROCm:** Fixed ROCm installation by switching to PyTorch's official ROCm 6.1 wheel index (`torch==2.5.1+rocm6.1`), which resolves the previous `torch==2.6.0` / `torchaudio==2.5.1` version conflict. A new `requirements-rocm-init.txt` installs the ROCm PyTorch stack before other dependencies. Both `Dockerfile.rocm` and `start.py` now use a two-step install to prevent pip from replacing ROCm torch wheels with CPU-only versions.
-- Thanks to community contributors in issues #20, #58, #64, #89, #92, #98, #109, #114, and #122 for testing and reporting solutions.
+- Thanks to community contributors in issues #20, #23, #44, #58, #64, #79, #89, #92, #93, #98, #105, #107, #109, #113, #114, #121, and #122 for testing and reporting solutions.
 
 ### 🧰 Automated launcher + easy updates
 
@@ -225,7 +230,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 ## 🔩 System Prerequisites
 
 *   **Operating System:** Windows 10/11 (64-bit) or Linux (Debian/Ubuntu recommended).
-*   **Python:** Version 3.10 or later ([Download](https://www.python.org/downloads/)). *When using Portable Mode on Windows, Python is only needed on the machine where you first set up the application. The target machine (where you copy/share the folder to) does not need Python installed at all.*
+*   **Python:** Version **3.10 recommended** ([Download](https://www.python.org/downloads/release/python-31011/)). Python 3.11 and 3.12 also work but may require building some dependencies from source. **Python 3.13+ is not supported** — several key dependencies (torch, ONNX) lack pre-built wheels for 3.13. On Windows, the launcher's Portable Mode automatically uses Python 3.10 regardless of your system Python version. *When using Portable Mode, Python is only needed on the machine where you first set up the application.*
 *   **Git:** For cloning the repository ([Download](https://git-scm.com/downloads)).
 *   **Internet:** For downloading dependencies and models from Hugging Face Hub.
 *   **Disk Space:** 10GB+ recommended (for dependencies and model cache).
@@ -480,11 +485,12 @@ This is the most straightforward option and works on any machine without a compa
 # Make sure your (venv) is active
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 ```
 
 <details>
 <summary><strong>💡 How This Works</strong></summary>
-The `requirements.txt` file is specially crafted for CPU users. It tells `pip` to use PyTorch's CPU-specific package repository and pins compatible versions of `torch` and `torchvision`. This prevents `pip` from installing mismatched versions, which is a common source of errors.
+The `requirements.txt` file installs CPU PyTorch and all server dependencies. Chatterbox is installed separately with `--no-deps` to prevent pip from pulling in conflicting torch versions or triggering ONNX source builds.
 </details>
 
 ---
@@ -493,12 +499,13 @@ The `requirements.txt` file is specially crafted for CPU users. It tells `pip` t
 
 For users with NVIDIA GPUs. This provides the best performance for RTX 20/30/40 series.
 
-**Prerequisite:** Ensure you have the latest NVIDIA drivers installed.
+**Prerequisite:** Ensure you have the latest NVIDIA drivers installed. **Python 3.10 recommended** (3.11/3.12 also work; 3.13+ is not supported).
 
 ```bash
 # Make sure your (venv) is active
 pip install --upgrade pip
 pip install -r requirements-nvidia.txt
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 ```
 
 **After installation, verify that PyTorch can see your GPU:**
@@ -509,7 +516,7 @@ If `CUDA available:` shows `True`, your setup is correct!
 
 <details>
 <summary><strong>💡 How This Works</strong></summary>
-The `requirements-nvidia.txt` file instructs `pip` to use PyTorch's official CUDA 12.1 package repository. It pins specific, compatible versions of `torch`, `torchvision`, and `torchaudio` that are built with CUDA support. This guarantees that the versions required by `chatterbox-tts` are met with the correct GPU-enabled libraries, preventing conflicts.
+The `requirements-nvidia.txt` file installs PyTorch with CUDA 12.1 support plus all server dependencies. Chatterbox is installed separately with `--no-deps` to prevent pip from downgrading the CUDA torch to a CPU version or triggering ONNX source builds.
 </details>
 
 ---
@@ -1199,9 +1206,10 @@ lspci | grep VGA
 ### Apple Silicon (MPS) Issues
 
 *   **MPS Not Available:** Ensure you have macOS 12.3+ and an Apple Silicon Mac. Verify with `python -c "import torch; print(torch.backends.mps.is_available())"`
+*   **Turbo Model Float64 Error:** If you see "Cannot convert a MPS Tensor to float64 dtype", update to the latest version. This is now fixed in the chatterbox-v2 fork (s3tokenizer and voice_encoder force float32). The `start.py` launcher also applies this patch automatically.
 *   **Installation Conflicts:** If you encounter version conflicts, follow the exact Apple Silicon installation sequence in Option 4, installing PyTorch first before other dependencies.
-*   **ONNX Build Errors:** Use the specific ONNX version `pip install onnx==1.16.0` as shown in the installation steps.
-*   **Model Loading Errors:** Ensure `config.yaml` has `device: mps` in the `tts_engine` section.
+*   **ONNX Build Errors:** Now resolved — `onnx==1.16.0` is pinned in all requirements files to use pre-built wheels. If you still hit issues, ensure you're using Python 3.10.
+*   **Model Loading Errors:** Ensure `config.yaml` has `device: auto` (or `device: mps`) in the `tts_engine` section.
 
 ### NVIDIA GPU Issues
 
@@ -1222,6 +1230,8 @@ lspci | grep VGA
 
 ### General Issues
 
+*   **ONNX / wheel build failures:** This is usually caused by Python 3.13+ or a missing pre-built wheel. Use Python 3.10 and ensure `onnx==1.16.0` is pinned. The updated requirements files handle this automatically.
+*   **"No matching distribution found for torch==2.5.1+cu121":** You're likely on Python 3.13+ which doesn't have torch 2.5.1 wheels. Downgrade to Python 3.10 or use the Windows launcher's Portable Mode which handles this automatically.
 *   **Import Errors (e.g., `chatterbox-tts`, `librosa`):** Ensure virtual environment is active and dependencies installed successfully. Try reinstalling: `python start.py --reinstall`
 *   **`libsndfile` Error (Linux):** Run `sudo apt install libsndfile1`.
 *   **Model Download Fails:** Check internet connection. `ChatterboxTTS.from_pretrained()` will attempt to download from Hugging Face Hub. Ensure `model.repo_id` in `config.yaml` is correct.

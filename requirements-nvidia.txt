@@ -11,9 +11,25 @@ torchvision==0.20.1+cu121
 torchaudio==2.5.1+cu121
 
 # --- Core Application Dependencies ---
+#
+# IMPORTANT: chatterbox-tts is NOT included here. It must be installed
+# separately with --no-deps to prevent torch version conflicts and
+# ONNX source build failures.
+#
+# The start.py launcher handles this automatically.
+#
+# For manual installation, run these commands in order:
+#   pip install -r requirements-nvidia.txt
+#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 
-# Chatterbox TTS engine - Install from chatterbox-v2 fork
-chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master
+# Chatterbox Dependencies (explicit, since --no-deps skips them)
+conformer==0.3.2
+diffusers==0.29.0
+transformers==4.46.3
+s3tokenizer
+omegaconf==2.3.0
+resampy==0.4.3
+onnx==1.16.0                    # Pinned to ensure pre-built wheel
 
 # Core Web Framework
 fastapi

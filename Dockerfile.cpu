@@ -1,0 +1,42 @@
+FROM python:3.10-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+# Set the Hugging Face home directory for better model caching
+ENV HF_HOME=/app/hf_cache
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libsndfile1 \
+    ffmpeg \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up working directory
+WORKDIR /app
+
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt ./requirements.txt
+
+# Install dependencies:
+# 1. Requirements file installs CPU torch + all server dependencies
+# 2. Chatterbox with --no-deps to prevent pip from pulling conflicting versions
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir -r requirements.txt && \
+    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+
+# Copy the rest of the application code
+COPY . .
+
+# Create required directories for the application
+RUN mkdir -p model_cache reference_audio outputs voices logs hf_cache
+
+# Expose the port the application will run on
+EXPOSE 8004
+
+# Command to run the application
+CMD ["python3", "server.py"]

@@ -14,6 +14,15 @@
 # The --no-deps flag on chatterbox-tts is critical: without it, pip will
 # replace the ROCm torch wheels with CPU-only versions from PyPI.
 
+# Chatterbox Dependencies (explicit, since --no-deps skips them)
+conformer==0.3.2
+diffusers==0.29.0
+transformers==4.46.3
+s3tokenizer
+omegaconf==2.3.0
+resampy==0.4.3
+onnx==1.16.0                    # Pinned to ensure pre-built wheel
+
 # Core Web Framework
 fastapi
 uvicorn[standard]
