@@ -30,7 +30,8 @@ torchaudio==2.5.1
 conformer==0.3.2
 diffusers==0.29.0
 transformers==4.46.3
-s3tokenizer
+s3tokenizer==0.3.0
+einops
 omegaconf==2.3.0
 resampy==0.4.3
 onnx==1.16.0                    # Pinned to ensure pre-built wheel (avoids CMake source builds)
