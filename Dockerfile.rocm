@@ -37,7 +37,8 @@ COPY requirements-rocm.txt ./requirements-rocm.txt
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir -r requirements-rocm-init.txt && \
     python3 -m pip install --no-cache-dir -r requirements-rocm.txt && \
-    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0 && \
+    python3 -m pip install --no-cache-dir "protobuf>=4.25.0"
 
 # Copy the rest of the application code
 COPY . .

@@ -42,7 +42,8 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
     if [ "$RUNTIME" = "nvidia" ]; then \
         pip3 install --no-cache-dir -r requirements-nvidia.txt; \
     fi && \
-    pip3 install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+    pip3 install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0 && \
+    pip3 install --no-cache-dir "protobuf>=4.25.0"
 # Copy the rest of the application code
 COPY . .
 

@@ -1505,12 +1505,19 @@ def install_chatterbox_no_deps(venv_pip):
 
     success = run_command_with_progress(cmd, description="Installing Chatterbox TTS + s3tokenizer + onnx")
 
-    if success:
-        print_substep("Chatterbox TTS installed", "done")
-    else:
+    if not success:
         print_substep("Chatterbox TTS installation failed", "error")
+        return False
 
-    return success
+    print_substep("Chatterbox TTS installed", "done")
+
+    # Force-upgrade protobuf for onnx compatibility.
+    # descript-audiotools pins protobuf<3.20 but onnx 1.16.0 needs >=3.20.2.
+    # descript-audiotools works fine at runtime with newer protobuf.
+    protobuf_cmd = f'"{venv_pip}" install "protobuf>=4.25.0"'
+    run_command_with_progress(protobuf_cmd, description="Upgrading protobuf for onnx compatibility")
+
+    return True
 
 
 def perform_installation(venv_pip, install_type, root_dir):
