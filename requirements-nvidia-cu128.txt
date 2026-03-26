@@ -37,7 +37,7 @@ resemble-perth==1.0.1
 onnx==1.16.0                    # Pinned to ensure pre-built wheel
 
 # --- Core Web Framework ---
-fastapi
+fastapi>=0.100.0,<0.116.0      # starlette<1.0 needed for TemplateResponse compat
 uvicorn[standard]
 
 # --- ML & Audio Libraries ---
