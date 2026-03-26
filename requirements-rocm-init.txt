@@ -1,0 +1,17 @@
+# requirements-rocm-init.txt
+#
+# ROCm PyTorch stack - MUST be installed BEFORE requirements-rocm.txt
+# Uses PyTorch's official ROCm 6.1 wheel index which provides torch 2.5.1
+# with ROCm support (matching chatterbox-tts requirements).
+#
+# The Dockerfile.rocm and start.py handle this automatically.
+# For manual installation:
+#   pip install -r requirements-rocm-init.txt
+#   pip install -r requirements-rocm.txt
+#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+
+-i https://download.pytorch.org/whl/rocm6.1
+torch==2.5.1
+torchaudio==2.5.1
+torchvision==0.20.1
+pytorch_triton_rocm==3.1.0

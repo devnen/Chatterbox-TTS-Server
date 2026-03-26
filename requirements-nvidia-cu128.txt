@@ -1,18 +1,14 @@
 # ============================================================================
 # CHATTERBOX TTS SERVER - REQUIREMENTS (NVIDIA CUDA 12.8 / BLACKWELL)
 # ============================================================================
-# This file provides CUDA 12.8 support for RTX 5090 / Blackwell architecture (sm_120)
-#
-# Use this file if you have:
-# - NVIDIA RTX 5090 or other Blackwell-based GPUs
-# - CUDA 12.8+ drivers installed (driver version 570+)
-# - Need for PyTorch 2.8.0 with sm_120 support
+# This file provides CUDA 12.8 support for Blackwell architecture (sm_120):
+#   - RTX 5060 Ti, RTX 5070, RTX 5070 Ti, RTX 5080, RTX 5090
 #
 # For RTX 20/30/40 series GPUs, use requirements-nvidia.txt instead.
 #
 # ============================================================================
-# IMPORTANT: This file does NOT include chatterbox-tts because it must be
-# installed separately with --no-deps to prevent PyTorch downgrade.
+# IMPORTANT: chatterbox-tts is NOT included here. It must be installed
+# separately with --no-deps to prevent PyTorch from being downgraded.
 #
 # The start.py launcher handles this automatically.
 #
@@ -22,17 +18,13 @@
 # ============================================================================
 
 # --- PyTorch CUDA 12.8 Package Index ---
-#--extra-index-url https://download.pytorch.org/whl/cu130
+--extra-index-url https://download.pytorch.org/whl/cu128
 
-# --- Deep Learning Framework (CUDA 12.8) ---
-# PyTorch 2.8.0 with CUDA 12.8 - includes sm_120 (Blackwell) support
-#torch==2.9.0
-#torchvision==0.24.0
-#torchaudio==2.9.0
+# --- Deep Learning Framework (CUDA 12.8 with sm_120 Blackwell support) ---
+torch==2.9.0
+torchvision==0.24.0
+torchaudio==2.9.0
 
-# Chatterbox TTS engine - Install from chatterbox-v2 fork
-chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git@master
-#    pip3 install --no-cache-dir --no-deps git+https://github.com/resemble-ai/chatterbox.git;
 # --- Core Web Framework ---
 fastapi
 uvicorn[standard]

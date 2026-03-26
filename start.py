@@ -97,12 +97,15 @@ REQUIREMENTS_MAP = {
     INSTALL_ROCM: "requirements-rocm.txt",
 }
 
+# ROCm init requirements file (installed before main requirements)
+REQUIREMENTS_ROCM_INIT = "requirements-rocm-init.txt"
+
 # Human-readable names for installation types
 INSTALL_NAMES = {
     INSTALL_CPU: "CPU Only",
     INSTALL_NVIDIA: "NVIDIA GPU (CUDA 12.1)",
     INSTALL_NVIDIA_CU128: "NVIDIA GPU (CUDA 12.8 / Blackwell)",
-    INSTALL_ROCM: "AMD GPU (ROCm 6.4)",
+    INSTALL_ROCM: "AMD GPU (ROCm 6.1)",
 }
 
 # Chatterbox fork URL (used for CUDA 12.8 installation)
@@ -1368,7 +1371,7 @@ def show_installation_menu(gpu_info, default_choice):
         ("1", "CPU Only", "No GPU acceleration - works on any system"),
         ("2", "NVIDIA GPU (CUDA 12.1)", "Standard for RTX 20/30/40 series"),
         ("3", "NVIDIA GPU (CUDA 12.8)", "For RTX 5090 / Blackwell GPUs only"),
-        ("4", "AMD GPU (ROCm 6.4)", "For AMD GPUs on Linux"),
+        ("4", "AMD GPU (ROCm 6.1)", "For AMD GPUs on Linux"),
     ]
 
     for num, name, desc in options:
@@ -1482,7 +1485,11 @@ def install_requirements(venv_pip, requirements_file, root_dir):
 
 def install_chatterbox_no_deps(venv_pip):
     """
-    Install Chatterbox TTS without dependencies (for CUDA 12.8).
+    Install Chatterbox TTS without dependencies.
+
+    Required for CUDA 12.8 (Blackwell) and ROCm installations to prevent pip
+    from replacing the platform-specific PyTorch wheels (cu128 or ROCm) with
+    generic CPU-only versions from PyPI.
 
     Args:
         venv_pip: Path to pip executable in venv
@@ -1490,7 +1497,9 @@ def install_chatterbox_no_deps(venv_pip):
     Returns:
         True on success, False on failure
     """
-    print_substep("Installing Chatterbox TTS (--no-deps to preserve PyTorch 2.8)...")
+    print_substep(
+        "Installing Chatterbox TTS (--no-deps to preserve PyTorch build)..."
+    )
 
     cmd = f'"{venv_pip}" install --no-deps {CHATTERBOX_REPO}'
 
@@ -1522,12 +1531,23 @@ def perform_installation(venv_pip, install_type, root_dir):
         print_error(f"Unknown installation type: {install_type}")
         return False
 
-    # Step 1: Install requirements
+    # ROCm requires a two-step install: ROCm PyTorch wheels first, then deps
+    if install_type == INSTALL_ROCM:
+        rocm_init_path = root_dir / REQUIREMENTS_ROCM_INIT
+        if not rocm_init_path.exists():
+            print_error(f"ROCm init file not found: {REQUIREMENTS_ROCM_INIT}")
+            return False
+        print_substep(f"Installing ROCm PyTorch from {REQUIREMENTS_ROCM_INIT}...")
+        if not install_requirements(venv_pip, REQUIREMENTS_ROCM_INIT, root_dir):
+            return False
+
+    # Step 1: Install main requirements
     if not install_requirements(venv_pip, requirements_file, root_dir):
         return False
 
-    # Step 2: For CUDA 12.8, install chatterbox separately with --no-deps
-    if install_type == INSTALL_NVIDIA_CU128:
+    # Step 2: For CUDA 12.8 and ROCm, install chatterbox separately with
+    # --no-deps to prevent pip from replacing platform-specific torch wheels
+    if install_type in (INSTALL_NVIDIA_CU128, INSTALL_ROCM):
         if not install_chatterbox_no_deps(venv_pip):
             return False
 
@@ -2473,9 +2493,15 @@ def main():
             print()
             print("  4. Try installing manually:")
             requirements_file = REQUIREMENTS_MAP.get(install_type, "requirements.txt")
-            print(f"     pip install -r {requirements_file}")
-            if install_type == INSTALL_NVIDIA_CU128:
+            if install_type == INSTALL_ROCM:
+                print(f"     pip install -r {REQUIREMENTS_ROCM_INIT}")
+                print(f"     pip install -r {requirements_file}")
                 print(f"     pip install --no-deps {CHATTERBOX_REPO}")
+            elif install_type == INSTALL_NVIDIA_CU128:
+                print(f"     pip install -r {requirements_file}")
+                print(f"     pip install --no-deps {CHATTERBOX_REPO}")
+            else:
+                print(f"     pip install -r {requirements_file}")
             print()
             sys.exit(1)
 

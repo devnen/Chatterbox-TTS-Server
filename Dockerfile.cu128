@@ -1,7 +1,5 @@
 FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
-ARG RUNTIME=nvidia
-
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -28,20 +26,16 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 # Set up working directory
 WORKDIR /app
 
-# Upgrade pip first
-#RUN pip3 install --upgrade pip
-COPY requirements-nvidia-cu128.txt .
+# Copy requirements first to leverage Docker cache
+COPY requirements-nvidia-cu128.txt ./requirements-nvidia-cu128.txt
 
-# Upgrade pip and install Python dependencies
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r requirements-nvidia-cu128.txt
-
-
-RUN if [ "$RUNTIME" = "nvidia" ]; then \
-    pip3 install --no-cache-dir \
-      --index-url https://download.pytorch.org/whl/cu128 \
-      torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 ; \
-    fi
+# Install dependencies:
+# 1. Requirements file installs torch 2.9.0+cu128 (with sm_120 Blackwell support)
+#    plus all other server dependencies
+# 2. Chatterbox with --no-deps to prevent pip from downgrading torch
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir -r requirements-nvidia-cu128.txt && \
+    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 
 # Copy the rest of the application code
 COPY . .

@@ -1,16 +1,24 @@
-# requirements.txt
-
-# Chatterbox TTS engine - Install from chatterbox-v2 fork
-chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master
+# requirements-rocm.txt
+#
+# AMD ROCm dependencies for Chatterbox TTS Server.
+#
+# IMPORTANT: PyTorch (torch, torchaudio, torchvision, triton) are installed
+# separately via requirements-rocm-init.txt to avoid version conflicts.
+# The Dockerfile.rocm and start.py handle this automatically.
+#
+# For manual installation, run these commands in order:
+#   pip install -r requirements-rocm-init.txt
+#   pip install -r requirements-rocm.txt
+#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+#
+# The --no-deps flag on chatterbox-tts is critical: without it, pip will
+# replace the ROCm torch wheels with CPU-only versions from PyPI.
 
 # Core Web Framework
 fastapi
 uvicorn[standard]
 
 # Machine Learning & Audio
-torch @ https://repo.radeon.com/rocm/manylinux/rocm-rel-6.4.1/torch-2.6.0%2Brocm6.4.1.git1ded221d-cp310-cp310-linux_x86_64.whl
-torchaudio @ https://repo.radeon.com/rocm/manylinux/rocm-rel-6.4.1/torchaudio-2.6.0%2Brocm6.4.1.gitd8831425-cp310-cp310-linux_x86_64.whl
-pytorch-triton-rocm @ https://repo.radeon.com/rocm/manylinux/rocm-rel-6.4.1/pytorch_triton_rocm-3.2.0%2Brocm6.4.1.git6da9e660-cp310-cp310-linux_x86_64.whl
 numpy>=1.24.0,<1.26.0  # Match chatterbox-v2 requirements
 soundfile # Requires libsndfile system library (e.g., sudo apt-get install libsndfile1 on Debian/Ubuntu)
 huggingface_hub

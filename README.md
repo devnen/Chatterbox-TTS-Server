@@ -81,9 +81,11 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 
 **Switching models is effortless:** Simply select your preferred model from the engine selector dropdown at the top of the Web UI. No restarts, no configuration changes required—just instant hot-swapping to test quality, speed, and language support across the complete Chatterbox family.
 
-### 🖥️ New NVIDIA / CUDA support
+### 🖥️ Fixed NVIDIA Blackwell / CUDA 12.8 and AMD ROCm installation
 
-- Updated to support **NVIDIA CUDA 12.8** and **RTX 5090 / Blackwell** generation GPUs.
+- **Blackwell (CUDA 12.8):** Fixed `requirements-nvidia-cu128.txt` to properly install PyTorch 2.9.0 with CUDA 12.8 (`sm_120` support) for RTX 5060 Ti, 5070, 5070 Ti, 5080, and 5090 GPUs. The `Dockerfile.cu128` now correctly installs chatterbox with `--no-deps` to prevent PyTorch downgrade.
+- **AMD ROCm:** Fixed ROCm installation by switching to PyTorch's official ROCm 6.1 wheel index (`torch==2.5.1+rocm6.1`), which resolves the previous `torch==2.6.0` / `torchaudio==2.5.1` version conflict. A new `requirements-rocm-init.txt` installs the ROCm PyTorch stack before other dependencies. Both `Dockerfile.rocm` and `start.py` now use a two-step install to prevent pip from replacing ROCm torch wheels with CPU-only versions.
+- Thanks to community contributors in issues #20, #58, #64, #89, #92, #98, #109, #114, and #122 for testing and reporting solutions.
 
 ### 🧰 Automated launcher + easy updates
 
@@ -514,12 +516,12 @@ The `requirements-nvidia.txt` file instructs `pip` to use PyTorch's official CUD
 
 ### **Option 2b: NVIDIA GPU with CUDA 12.8 (RTX 5090 / Blackwell)**
 
-> **Note:** Only use this if you have an **RTX 5090** or other **Blackwell-based GPU**. For RTX 3000/4000 series, use Option 2 above.
+> **Note:** Only use this if you have a **Blackwell-based GPU** (RTX 5060 Ti, 5070, 5070 Ti, 5080, 5090). For RTX 2000/3000/4000 series, use Option 2 above.
 
-For users with the latest NVIDIA RTX 5090 or other Blackwell architecture GPUs that require CUDA 12.8 and sm_120 support.
+For users with NVIDIA Blackwell architecture GPUs that require CUDA 12.8 and sm_120 support.
 
 **Prerequisites:**
-- NVIDIA RTX 5090 or Blackwell-based GPU
+- NVIDIA RTX 5060 Ti, 5070, 5070 Ti, 5080, 5090 or other Blackwell-based GPU
 - CUDA 12.8+ drivers (driver version 570+)
 
 **Using Docker (Recommended for RTX 5090):**
@@ -534,7 +536,11 @@ docker compose -f docker-compose-cu128.yml up -d
 ```bash
 # Make sure your (venv) is active
 pip install --upgrade pip
+
+# Step 1: Install dependencies with PyTorch 2.9.0+cu128 (includes sm_120 support)
 pip install -r requirements-nvidia-cu128.txt
+
+# Step 2: Install chatterbox without dependencies (prevents PyTorch downgrade)
 pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 ```
 
@@ -550,7 +556,7 @@ You should see `sm_120` in the architectures list!
 <details>
 <summary><strong>💡 Why CUDA 12.8?</strong></summary>
 
-The RTX 5090 uses NVIDIA's new **Blackwell architecture** with compute capability **sm_120**. PyTorch 2.8.0 with CUDA 12.8 is the first stable release that includes support for this architecture. Earlier versions (including CUDA 12.1) will fail with the error: `CUDA error: no kernel image is available for execution on the device`.
+NVIDIA's Blackwell GPUs (RTX 5060 Ti, 5070, 5070 Ti, 5080, 5090) use compute capability **sm_120**. PyTorch 2.9.0 with CUDA 12.8 includes support for this architecture. Earlier versions (including CUDA 12.1) will fail with the error: `CUDA error: no kernel image is available for execution on the device`.
 
 See [README_CUDA128.md](README_CUDA128.md) for detailed setup instructions and troubleshooting.
 </details>
@@ -566,8 +572,18 @@ For users with modern, ROCm-compatible AMD GPUs.
 ```bash
 # Make sure your (venv) is active
 pip install --upgrade pip
+
+# Step 1: Install ROCm PyTorch stack first
+pip install -r requirements-rocm-init.txt
+
+# Step 2: Install remaining dependencies
 pip install -r requirements-rocm.txt
+
+# Step 3: Install chatterbox without dependencies (prevents ROCm torch overwrite)
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
 ```
+
+⚠️ **Critical:** The `--no-deps` flag on chatterbox-tts is required to prevent pip from replacing the ROCm PyTorch wheels with CPU-only versions from PyPI. The `start.py` launcher handles this automatically.
 
 **After installation, verify that PyTorch can see your GPU:**
 ```bash
@@ -577,7 +593,13 @@ If `ROCm available:` shows `True`, your setup is correct!
 
 <details>
 <summary><strong>💡 How This Works</strong></summary>
-The `requirements-rocm.txt` file works just like the NVIDIA one, but it points `pip` to PyTorch's official ROCm 6.4.1 package repository. This ensures that the correct GPU-enabled libraries for AMD hardware are installed, providing a stable and performant environment.
+
+ROCm installation uses a two-step process:
+1. `requirements-rocm-init.txt` installs PyTorch from the official ROCm 6.1 wheel index (`torch==2.5.1+rocm6.1`), ensuring you get AMD GPU-accelerated builds.
+2. `requirements-rocm.txt` installs remaining server dependencies without touching PyTorch.
+3. Chatterbox is installed with `--no-deps` to prevent pip's dependency resolver from replacing the ROCm torch with a CPU-only version.
+
+**For APU/iGPU users:** If you encounter "HIP error: invalid device function", you may need to set `HSA_OVERRIDE_GFX_VERSION`. See [AMD ROCm Support Details](#amd-rocm-support-details) below.
 </details>
 
 ---
@@ -1115,7 +1137,7 @@ lspci | grep VGA
 ```
 
 **Common GPU Architecture Mappings:**
-- **RX 7900 XTX/XT, RX 7800 XT, RX 7700 XT:** gfx1100 → Use `HSA_OVERRIDE_GFX_VERSION=11.0.0`
+- **Ryzen AI Max+ 395 (Strix Halo), RX 7900 XTX/XT, RX 7800 XT, RX 7700 XT:** gfx1100/gfx1150 → Use `HSA_OVERRIDE_GFX_VERSION=11.0.0`
 - **RX 6900 XT, RX 6800 XT, RX 6700 XT, RX 6600 XT:** gfx1030-1032 → Use `HSA_OVERRIDE_GFX_VERSION=10.3.0`
 - **RX 5700 XT, RX 5600 XT:** gfx1010 → Use `HSA_OVERRIDE_GFX_VERSION=10.3.0`
 - **Vega 64, Vega 56:** gfx900-906 → Use `HSA_OVERRIDE_GFX_VERSION=9.0.6`
@@ -1125,7 +1147,7 @@ lspci | grep VGA
 *   **Supported GPUs:** AMD Instinct data center GPUs and select Radeon GPUs. Check the [ROCm compatibility list](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-gpus).
 *   **Operating System:** ROCm is currently supported only on Linux systems.
 *   **Performance:** AMD GPUs with ROCm provide excellent performance for ML workloads, with support for mixed-precision training.
-*   **PyTorch Version:** Uses PyTorch 2.6.0 with ROCm 6.4.1 for optimal compatibility and performance.
+*   **PyTorch Version:** Uses PyTorch 2.5.1 with ROCm 6.1 from PyTorch's official wheel index for optimal compatibility.
 
 ## 🔍 Troubleshooting
 
