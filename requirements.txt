@@ -2,15 +2,12 @@
 # CHATTERBOX TTS SERVER - REQUIREMENTS (CPU-ONLY INSTALLATION)
 # ============================================================================
 # This file ensures compatible PyTorch, ML, and audio processing libraries
-# are installed for CPU-only operation. All packages are pinned for stability.
+# are installed for CPU-only operation.
 
 # --- PyTorch CPU-Only Installation Index ---
-# Use PyTorch's official CPU-only package index for torch components
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 # --- Deep Learning Framework (CPU-Only) ---
-# Pinning a compatible set of torch-related libraries is crucial to avoid dependency conflicts.
-# Updated to use PyTorch 2.5.1 for compatibility with our Colab-compatible chatterbox fork
 torch==2.5.1
 torchvision==0.20.1
 torchaudio==2.5.1
@@ -31,54 +28,36 @@ conformer==0.3.2
 diffusers==0.29.0
 transformers==4.46.3
 s3tokenizer==0.3.0
-einops
+einops>=0.7.0
 omegaconf==2.3.0
 resampy==0.4.3
 resemble-perth==1.0.1
-onnx==1.16.0                    # Pinned to ensure pre-built wheel (avoids CMake source builds)
+onnx==1.16.0                    # Pinned to ensure pre-built wheel
 
 # --- Web Framework & Server ---
 fastapi>=0.100.0,<0.116.0       # starlette<1.0 needed for TemplateResponse compat
-uvicorn[standard]               # ASGI server with performance extras
+uvicorn[standard]>=0.27.0
 
-# --- Scientific Computing & ML Libraries ---
-numpy>=1.24.0                   # torch 2.5.1 works fine with numpy 2.x
-librosa                         # Advanced audio/music analysis
-safetensors                     # Safe tensor serialization format
-descript-audio-codec            # Audio codec for ML applications
-
-# --- Audio I/O & Processing ---
-soundfile                       # Audio file I/O (requires libsndfile system library)
-pydub                          # Simple audio manipulation
-audiotsm                       # Audio time-scale modification
-praat-parselmouth              # Python interface to Praat speech analysis
-                               # NOTE: Use 'praat-parselmouth' not 'parselmouth' 
-                               # to avoid setuptools use_2to3 compatibility issues
+# --- ML & Audio Libraries ---
+numpy>=1.24.0
+librosa>=0.10.0
+safetensors>=0.4.0
+descript-audio-codec==1.0.0
+soundfile>=0.12.0
+pydub>=0.25.0
+audiotsm>=0.1.2
+praat-parselmouth>=0.4.0
 
 # --- Web & API Utilities ---
-python-multipart               # Form data parsing for FastAPI
-requests                       # HTTP client library
-Jinja2                        # Template engine
-aiofiles                      # Async file operations
-hf_transfer                     # Speed up file transfers with the Hugging Face Hub.
-
+python-multipart>=0.0.5
+requests>=2.28.0
+Jinja2>=3.1.2,<3.2.0
+aiofiles>=23.0.0
+hf_transfer>=0.1.4
 
 # --- Configuration & Data Processing ---
-PyYAML                        # YAML configuration file support
-watchdog                      # File system event monitoring
-unidecode                     # Unicode text transliteration
-inflect                       # Natural language inflection
-tqdm                          # Progress bars for loops
-
-# ============================================================================
-# INSTALLATION NOTES:
-# 
-# 1. Ensure your virtual environment is activated before installation
-# 2. Run: pip install --upgrade pip
-# 3. Run: pip install -r requirements.txt
-# 4. For parselmouth issues, the package name is 'praat-parselmouth' on PyPI
-#    but you import it as 'import parselmouth' in Python code
-# 5. System dependencies may be required:
-#    - libsndfile (for soundfile package)
-#    - FFmpeg (for some audio processing features)
-# ============================================================================
+PyYAML>=6.0
+watchdog>=3.0.0
+unidecode>=1.3.0
+inflect>=7.0.0
+tqdm>=4.65.0
