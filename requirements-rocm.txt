@@ -29,7 +29,7 @@ fastapi
 uvicorn[standard]
 
 # Machine Learning & Audio
-numpy>=1.24.0,<1.26.0  # Match chatterbox-v2 requirements
+numpy>=1.24.0,<2.0     # Compatible with torch and chatterbox
 soundfile # Requires libsndfile system library (e.g., sudo apt-get install libsndfile1 on Debian/Ubuntu)
 huggingface_hub
 descript-audio-codec

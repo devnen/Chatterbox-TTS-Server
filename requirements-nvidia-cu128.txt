@@ -40,7 +40,7 @@ fastapi
 uvicorn[standard]
 
 # --- ML & Audio Libraries ---
-numpy>=1.24.0,<1.26.0  # Match chatterbox-v2 requirements
+numpy>=1.24.0,<2.0     # Compatible with torch and chatterbox
 soundfile
 librosa
 safetensors
