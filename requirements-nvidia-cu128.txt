@@ -33,6 +33,7 @@ s3tokenizer==0.3.0
 einops
 omegaconf==2.3.0
 resampy==0.4.3
+resemble-perth==1.0.1
 onnx==1.16.0                    # Pinned to ensure pre-built wheel
 
 # --- Core Web Framework ---
@@ -40,7 +41,7 @@ fastapi
 uvicorn[standard]
 
 # --- ML & Audio Libraries ---
-numpy>=1.24.0,<2.0     # Compatible with torch and chatterbox
+numpy>=1.24.0           # torch works fine with numpy 2.x
 soundfile
 librosa
 safetensors

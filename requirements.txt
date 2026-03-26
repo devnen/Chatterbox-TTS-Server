@@ -34,6 +34,7 @@ s3tokenizer==0.3.0
 einops
 omegaconf==2.3.0
 resampy==0.4.3
+resemble-perth==1.0.1
 onnx==1.16.0                    # Pinned to ensure pre-built wheel (avoids CMake source builds)
 
 # --- Web Framework & Server ---
@@ -41,7 +42,7 @@ fastapi                         # Modern async web framework
 uvicorn[standard]               # ASGI server with performance extras
 
 # --- Scientific Computing & ML Libraries ---
-numpy>=1.24.0,<2.0              # Compatible with torch 2.5.1 and chatterbox
+numpy>=1.24.0                   # torch 2.5.1 works fine with numpy 2.x
 librosa                         # Advanced audio/music analysis
 safetensors                     # Safe tensor serialization format
 descript-audio-codec            # Audio codec for ML applications
