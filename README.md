@@ -10,7 +10,7 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 
 [![Project Link](https://img.shields.io/badge/GitHub-devnen/Chatterbox--TTS--Server-blue?style=for-the-badge&logo=github)](https://github.com/devnen/Chatterbox-TTS-Server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Python Version](https://img.shields.io/badge/Python-3.10_(recommended)-blue.svg?style=for-the-badge)](https://www.python.org/downloads/release/python-31011/)
+[![Python Version](https://img.shields.io/badge/Python-3.10_(required)-blue.svg?style=for-the-badge)](https://www.python.org/downloads/release/python-31011/)
 [![Framework](https://img.shields.io/badge/Framework-FastAPI-green.svg?style=for-the-badge)](https://fastapi.tiangolo.com/)
 [![Model Source](https://img.shields.io/badge/Model-ResembleAI/chatterbox-orange.svg?style=for-the-badge)](https://github.com/resemble-ai/chatterbox)
 [![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg?style=for-the-badge)](https://www.docker.com/)
@@ -37,9 +37,9 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 - The launcher now offers **Portable Mode** for all Windows users during first-time setup — selected by default.
 - Creates a fully self-contained installation: the entire project folder can be **copied to a USB drive**, **zipped and shared**, or **moved anywhere** on the filesystem.
 - The recipient just double-clicks `start.bat` — **no Python installation required** on the target machine.
-- Works with any system Python 3.10 or newer. On Python 3.11+, Portable Mode also resolves dependency compatibility issues automatically.
+- Works with any system Python 3.10+, but the embedded runtime always uses Python 3.10 — the only fully supported version. If your system Python is 3.11+, Portable Mode is the easiest way to avoid dependency issues on Windows.
 - Use `--portable` to skip the prompt and install in portable mode directly, or `--no-portable` for a standard virtual environment.
-- Linux and macOS continue to use standard virtual environments, which work reliably on those platforms.
+- Linux and macOS use standard virtual environments with Python 3.10. Portable Mode is not available on these platforms, so Python 3.10 must be installed on the system.
 
 ### 🌍 Chatterbox Multilingual support (new)
 
@@ -87,7 +87,7 @@ This server is based on the architecture and UI of our [Dia-TTS-Server](https://
 - **Apple Silicon / MPS:** Fixed Turbo model crash ("Cannot convert a MPS Tensor to float64 dtype") by forcing float32 in s3tokenizer and voice_encoder. Fix applied in the chatterbox-v2 fork and also as an automatic post-install patch in `start.py` for users of other chatterbox versions. Thanks to @jonas3245 (#93).
 - **Docker CPU:** New lightweight `Dockerfile.cpu` based on `python:3.10-slim` instead of the 4GB+ NVIDIA CUDA base image. `docker-compose-cpu.yml` now uses this smaller image. Removed deprecated `version` tags from all docker-compose files.
 - **config.yaml:** Default device changed from `cuda` to `auto` for correct auto-detection on all hardware (CUDA, MPS, CPU).
-- **Python version:** Clarified that **Python 3.10 is recommended**. Python 3.13+ is not supported due to missing wheels for torch and ONNX. The Windows launcher's Portable Mode handles this automatically.
+- **Python version:** **Python 3.10 is required** — it is the only version with pre-built wheels for all dependencies (torch, torchvision, ONNX). Python 3.11+ may fail due to missing wheels. The Windows launcher's Portable Mode handles this automatically by using an embedded Python 3.10 runtime.
 - **Blackwell (CUDA 12.8):** Fixed `requirements-nvidia-cu128.txt` to properly install PyTorch 2.9.0 with CUDA 12.8 (`sm_120` support) for RTX 5060 Ti, 5070, 5070 Ti, 5080, and 5090 GPUs. The `Dockerfile.cu128` now correctly installs chatterbox with `--no-deps` to prevent PyTorch downgrade.
 - **AMD ROCm:** Fixed ROCm installation by switching to PyTorch's official ROCm 6.1 wheel index (`torch==2.5.1+rocm6.1`), which resolves the previous `torch==2.6.0` / `torchaudio==2.5.1` version conflict. A new `requirements-rocm-init.txt` installs the ROCm PyTorch stack before other dependencies. Both `Dockerfile.rocm` and `start.py` now use a two-step install to prevent pip from replacing ROCm torch wheels with CPU-only versions.
 - Thanks to community contributors in issues #20, #23, #44, #58, #64, #79, #89, #92, #93, #98, #105, #107, #109, #113, #114, #121, and #122 for testing and reporting solutions.
@@ -230,7 +230,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 ## 🔩 System Prerequisites
 
 *   **Operating System:** Windows 10/11 (64-bit) or Linux (Debian/Ubuntu recommended).
-*   **Python:** Version **3.10 recommended** ([Download](https://www.python.org/downloads/release/python-31011/)). Python 3.11 and 3.12 also work but may require building some dependencies from source. **Python 3.13+ is not supported** — several key dependencies (torch, ONNX) lack pre-built wheels for 3.13. On Windows, the launcher's Portable Mode automatically uses Python 3.10 regardless of your system Python version. *When using Portable Mode, Python is only needed on the machine where you first set up the application.*
+*   **Python:** Version **3.10 required** ([Download](https://www.python.org/downloads/release/python-31011/)). Python 3.10 is the only version with pre-built wheels for all dependencies (torch, torchvision, ONNX, ONNXRuntime). **Python 3.11+ is not supported** — key dependencies lack pre-built wheels, causing build failures. On Windows, the launcher's Portable Mode automatically uses an embedded Python 3.10 runtime regardless of your system Python version. *When using Portable Mode, Python is only needed on the machine where you first set up the application.*
 *   **Git:** For cloning the repository ([Download](https://git-scm.com/downloads)).
 *   **Internet:** For downloading dependencies and models from Hugging Face Hub.
 *   **Disk Space:** 10GB+ recommended (for dependencies and model cache).
@@ -290,7 +290,7 @@ chmod +x start.sh
 
 #### What Happens
 
-1. The launcher checks your Python installation (3.10+ required)
+1. The launcher checks your Python installation (3.10 required; 3.10+ needed to bootstrap Portable Mode on Windows)
 2. **On Windows:** Offers **Portable Mode** (recommended) — creates a fully self-contained, movable installation. See [Portable Mode](#-portable-mode-windows) for details. Use `--portable` to skip this prompt or `--no-portable` for a standard virtual environment.
 3. Sets up the Python environment (portable or standard virtual environment)
 4. Detects your GPU hardware (NVIDIA, AMD, or CPU-only)
@@ -417,10 +417,10 @@ If you're sharing a portable installation, the recipient will need an internet c
 
 During first-time setup on Windows, the launcher offers a choice:
 
-*   **Portable Mode** (recommended, default): Creates a self-contained `python_embedded/` environment inside the project folder. Works with any system Python 3.10+.
-*   **Standard installation**: Uses a regular Python virtual environment (`venv/`). Works fine but is not portable.
+*   **Portable Mode** (recommended, default): Creates a self-contained `python_embedded/` environment inside the project folder using Python 3.10. Any system Python 3.10+ can bootstrap this process, but the embedded runtime is always Python 3.10.
+*   **Standard installation**: Uses a regular Python virtual environment (`venv/`). **Requires system Python 3.10** — Python 3.11+ will fail due to missing pre-built wheels for key dependencies.
 
-On **Python 3.11+**, Portable Mode is especially recommended because it also resolves compatibility issues with missing binary packages (ONNX, ONNXRuntime) that affect newer Python versions on Windows.
+If your system Python is 3.11+, **Portable Mode is required on Windows** because it uses an embedded Python 3.10 runtime, bypassing the dependency issues entirely.
 
 You can skip the prompt entirely with command-line flags:
 *   `python start.py --portable` — go straight to portable mode
@@ -429,7 +429,7 @@ You can skip the prompt entirely with command-line flags:
 
 #### Not Available on Linux / macOS
 
-Portable Mode is Windows-specific. On Linux and macOS, the standard virtual environment is used. This works reliably on those platforms because the dependency compatibility issues that motivated portable mode are Windows-specific.
+Portable Mode is Windows-specific. On Linux and macOS, the standard virtual environment is used. Python 3.10 is required on all platforms — the dependency compatibility issues (missing wheels for torchvision, ONNX) affect all operating systems, not just Windows.
 
 #### GPU Drivers Still Required
 
@@ -499,7 +499,7 @@ The `requirements.txt` file installs CPU PyTorch and all server dependencies. Ch
 
 For users with NVIDIA GPUs. This provides the best performance for RTX 20/30/40 series.
 
-**Prerequisite:** Ensure you have the latest NVIDIA drivers installed. **Python 3.10 recommended** (3.11/3.12 also work; 3.13+ is not supported).
+**Prerequisite:** Ensure you have the latest NVIDIA drivers installed. **Python 3.10 required** (3.11+ is not supported — pre-built wheels for torchvision and ONNX are unavailable).
 
 ```bash
 # Make sure your (venv) is active
@@ -1161,7 +1161,7 @@ lspci | grep VGA
 ### Launcher Issues
 
 *   **"Python not found" error:**
-    - Ensure Python 3.10+ is installed and added to PATH
+    - Ensure Python 3.10 is installed and added to PATH (3.11+ is not supported for standard installs)
     - Windows: Reinstall Python and check "Add Python to PATH" during installation
     - Linux: Install with `sudo apt install python3 python3-venv python3-pip`
 
@@ -1190,7 +1190,7 @@ lspci | grep VGA
     - To include models in the portable package, set `model_cache` in `config.yaml` to a path inside the project folder
 
 *   **Portable mode isn't offered / I'm on Linux:**
-    - Portable Mode is Windows-only. On Linux and macOS, the standard virtual environment is used, which works reliably on those platforms
+    - Portable Mode is Windows-only. On Linux and macOS, use a standard virtual environment with Python 3.10
 
 *   **Wrong hardware detected:**
     - The launcher detects NVIDIA GPUs via `nvidia-smi` and AMD GPUs via `rocm-smi`
@@ -1230,8 +1230,8 @@ lspci | grep VGA
 
 ### General Issues
 
-*   **ONNX / wheel build failures:** This is usually caused by Python 3.13+ or a missing pre-built wheel. Use Python 3.10 and ensure `onnx==1.16.0` is pinned. The updated requirements files handle this automatically.
-*   **"No matching distribution found for torch==2.5.1+cu121":** You're likely on Python 3.13+ which doesn't have torch 2.5.1 wheels. Downgrade to Python 3.10 or use the Windows launcher's Portable Mode which handles this automatically.
+*   **ONNX / wheel build failures:** This is usually caused by using Python 3.11+ which lacks pre-built wheels. Use Python 3.10 and ensure `onnx==1.16.0` is pinned. The updated requirements files handle this automatically.
+*   **"No matching distribution found for torchvision" or "torch==2.5.1+cu121":** You're likely on Python 3.11+ which doesn't have pre-built wheels for all pinned dependencies. Use Python 3.10 or the Windows launcher's Portable Mode which handles this automatically.
 *   **Import Errors (e.g., `chatterbox-tts`, `librosa`):** Ensure virtual environment is active and dependencies installed successfully. Try reinstalling: `python start.py --reinstall`
 *   **`libsndfile` Error (Linux):** Run `sudo apt install libsndfile1`.
 *   **Model Download Fails:** Check internet connection. `ChatterboxTTS.from_pretrained()` will attempt to download from Hugging Face Hub. Ensure `model.repo_id` in `config.yaml` is correct.
