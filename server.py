@@ -585,6 +585,35 @@ async def restart_server_endpoint():
         )
 
 
+@app.post("/api/unload", tags=["Configuration"])
+async def unload_model_endpoint():
+    """
+    Unloads the TTS model and releases all CUDA/GPU memory.
+    The model will need to be reloaded (via /restart_server) before TTS requests can be processed.
+    """
+    logger.info("Request received for /api/unload (Model Unload).")
+
+    try:
+        success = engine.unload_model()
+
+        if success:
+            logger.info("Model successfully unloaded and GPU memory released.")
+            return {"status": "unloaded"}
+        else:
+            error_msg = "Model unload failed. Check logs for details."
+            logger.error(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Critical error during model unload: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error during model unload: {str(e)}",
+        )
+
+
 # --- UI Helper API Endpoints ---
 @app.get("/get_reference_files", response_model=List[str], tags=["UI Helpers"])
 async def get_reference_files_api():
