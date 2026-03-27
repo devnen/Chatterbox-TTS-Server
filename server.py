@@ -1252,6 +1252,17 @@ async def custom_tts_endpoint(
         io.BytesIO(encoded_audio_bytes), media_type=media_type, headers=headers
     )
 
+@app.get("/v1/audio/voices", tags=["llama-swap Compatible"])
+# llama-swap, koboldcpp, and probably some more use this
+async def openai_voices_endpoint(model: str):
+    logger.debug("Request for /v1/audio/voices.")
+    try:
+        return {"status": "ok", "voices": [voice["filename"] for voice in utils.get_predefined_voices()]}
+    except Exception as e:
+        logger.error(f"Error getting predefined voices for API: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve predefined voices list."
+        )
 
 @app.post("/v1/audio/speech", tags=["OpenAI Compatible"])
 async def openai_speech_endpoint(request: OpenAISpeechRequest):
