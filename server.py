@@ -1254,7 +1254,7 @@ async def custom_tts_endpoint(
 
 @app.get("/v1/audio/voices", tags=["llama-swap Compatible"])
 # llama-swap, koboldcpp, and probably some more use this
-async def openai_voices_endpoint(model: str):
+async def openai_voices_endpoint(model: str = ""):
     logger.debug("Request for /v1/audio/voices.")
     try:
         return {"status": "ok", "voices": [voice["filename"] for voice in utils.get_predefined_voices()]}
