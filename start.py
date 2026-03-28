@@ -1514,8 +1514,11 @@ def install_chatterbox_no_deps(venv_pip):
     # Force-upgrade protobuf for onnx compatibility.
     # descript-audiotools pins protobuf<3.20 but onnx 1.16.0 needs >=3.20.2.
     # descript-audiotools works fine at runtime with newer protobuf.
-    protobuf_cmd = f'"{venv_pip}" install "protobuf>=4.25.0"'
-    run_command_with_progress(protobuf_cmd, description="Upgrading protobuf for onnx compatibility")
+    # Use --no-deps --force-reinstall to bypass pip's dependency resolver,
+    # which may refuse the upgrade on stricter pip versions (e.g. Python 3.14+).
+    protobuf_cmd = f'"{venv_pip}" install --no-deps --force-reinstall "protobuf>=4.25.0"'
+    if not run_command_with_progress(protobuf_cmd, description="Upgrading protobuf for onnx compatibility"):
+        print_substep("protobuf upgrade failed — onnx may not work correctly", "warning")
 
     return True
 
