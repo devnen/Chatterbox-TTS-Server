@@ -47,6 +47,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         ),  # Path to the server log file.
         "log_file_max_size_mb": 10,  # Maximum size of a single log file before rotation.
         "log_file_backup_count": 5,  # Number of backup log files to keep.
+        "ssl_certfile": None,  # Path to SSL certificate file for HTTPS. None = HTTP only.
+        "ssl_keyfile": None,  # Path to SSL private key file for HTTPS. None = HTTP only.
     },
     "model": {  # Added section for model source configuration
         "repo_id": "chatterbox-turbo",  # UPDATED: Default to Turbo model
@@ -721,6 +723,28 @@ def get_port() -> int:
     return config_manager.get_int(
         "server.port", _get_default_from_structure("server.port")
     )
+
+
+def get_ssl_config() -> Dict[str, str]:
+    """Returns uvicorn SSL kwargs if both certfile and keyfile are configured and exist.
+    Returns an empty dict when SSL is not configured (HTTP mode)."""
+    certfile = config_manager.get("server.ssl_certfile")
+    keyfile = config_manager.get("server.ssl_keyfile")
+
+    if not certfile or not keyfile:
+        return {}
+
+    certpath = Path(str(certfile))
+    keypath = Path(str(keyfile))
+
+    if not certpath.is_file():
+        logger.error(f"SSL certificate file not found: {certpath} — falling back to HTTP")
+        return {}
+    if not keypath.is_file():
+        logger.error(f"SSL key file not found: {keypath} — falling back to HTTP")
+        return {}
+
+    return {"ssl_certfile": str(certpath), "ssl_keyfile": str(keypath)}
 
 
 # Audio Output Settings Accessors

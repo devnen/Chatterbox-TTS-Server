@@ -43,6 +43,7 @@ from config import (
     config_manager,
     get_host,
     get_port,
+    get_ssl_config,
     get_log_file_path,
     get_output_path,
     get_reference_audio_path,
@@ -1381,12 +1382,14 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
 if __name__ == "__main__":
     server_host = get_host()
     server_port = get_port()
+    ssl_kwargs = get_ssl_config()
+    protocol = "https" if ssl_kwargs else "http"
 
-    logger.info(f"Starting TTS Server directly on http://{server_host}:{server_port}")
+    logger.info(f"Starting TTS Server directly on {protocol}://{server_host}:{server_port}")
     logger.info(
-        f"API documentation will be available at http://{server_host}:{server_port}/docs"
+        f"API documentation will be available at {protocol}://{server_host}:{server_port}/docs"
     )
-    logger.info(f"Web UI will be available at http://{server_host}:{server_port}/")
+    logger.info(f"Web UI will be available at {protocol}://{server_host}:{server_port}/")
 
     import uvicorn
 
@@ -1397,4 +1400,5 @@ if __name__ == "__main__":
         log_level="info",
         workers=1,
         reload=False,
+        **ssl_kwargs,
     )
