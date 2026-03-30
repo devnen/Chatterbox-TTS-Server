@@ -1244,6 +1244,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             "tts_engine.reference_audio_path": currentConfig.tts_engine?.reference_audio_path, "paths.output": currentConfig.paths?.output,
             "audio_output.format": currentConfig.audio_output?.format, "audio_output.sample_rate": currentConfig.audio_output?.sample_rate
         };
+        const checkboxFields = {
+            "audio_output.save_to_disk": currentConfig.audio_output?.save_to_disk
+        };
         for (const name in fieldsToDisplay) {
             const input = serverConfigForm.querySelector(`input[name="${name}"]`);
             if (input) {
@@ -1251,6 +1254,10 @@ document.addEventListener('DOMContentLoaded', async function () {
                 if (name.includes('.host') || name.includes('.port') || name.includes('.device') || name.includes('paths.')) input.readOnly = true;
                 else input.readOnly = false;
             }
+        }
+        for (const name in checkboxFields) {
+            const input = serverConfigForm.querySelector(`input[name="${name}"]`);
+            if (input) input.checked = !!checkboxFields[name];
         }
     }
     async function updateConfigStatus(button, statusElem, message, type = 'info', duration = 5000, enableButtonAfter = true) {

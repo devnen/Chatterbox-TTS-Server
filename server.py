@@ -1213,7 +1213,12 @@ async def custom_tts_endpoint(
 
     media_type = f"audio/{output_format_str}"
     timestamp_str = time.strftime("%Y%m%d_%H%M%S")
-    suggested_filename_base = f"tts_output_{timestamp_str}"
+    # Include generation parameters in filename for easy comparison across presets
+    temp_val = request.temperature if request.temperature is not None else get_gen_default_temperature()
+    exag_val = request.exaggeration if request.exaggeration is not None else get_gen_default_exaggeration()
+    cfg_val = request.cfg_weight if request.cfg_weight is not None else get_gen_default_cfg_weight()
+    param_tag = f"T{temp_val:.1f}_E{exag_val:.1f}_W{cfg_val:.1f}".replace(".", "")
+    suggested_filename_base = f"tts_output_{param_tag}_{timestamp_str}"
     download_filename = utils.sanitize_filename(
         f"{suggested_filename_base}.{output_format_str}"
     )
@@ -1290,42 +1295,81 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
         )
 
     try:
-        # Use the provided seed or the default
         seed_to_use = (
             request.seed if request.seed is not None else get_gen_default_seed()
         )
 
-        # Synthesize the audio
-        audio_tensor, sr = engine.synthesize(
-            text=request.input_,
-            audio_prompt_path=str(audio_prompt_path),
-            temperature=get_gen_default_temperature(),
-            exaggeration=get_gen_default_exaggeration(),
-            cfg_weight=get_gen_default_cfg_weight(),
-            seed=seed_to_use,
-            language=get_gen_default_language(),
-        )
-
-        if audio_tensor is None or sr is None:
+        # Split long text into chunks for better quality (same as /tts endpoint)
+        DEFAULT_CHUNK_SIZE = 120
+        text_chunks = utils.chunk_text_by_sentences(request.input_, DEFAULT_CHUNK_SIZE)
+        if not text_chunks:
             raise HTTPException(
-                status_code=500, detail="TTS engine failed to synthesize audio."
+                status_code=400, detail="Text processing resulted in no usable chunks."
             )
 
-        # Apply speed factor if not 1.0
-        if request.speed != 1.0:
-            audio_tensor, _ = utils.apply_speed_factor(audio_tensor, sr, request.speed)
+        logger.info(
+            f"OpenAI speech: processing {len(text_chunks)} chunk(s) for input of {len(request.input_)} chars"
+        )
 
-        # Convert tensor to numpy array
-        audio_np = audio_tensor.cpu().numpy()
+        all_audio_segments_np: List[np.ndarray] = []
+        engine_sr: Optional[int] = None
 
-        # Ensure it's 1D
-        if audio_np.ndim == 2:
-            audio_np = audio_np.squeeze()
+        for i, chunk_text in enumerate(text_chunks):
+            chunk_seed = seed_to_use + i if seed_to_use is not None and seed_to_use >= 0 else seed_to_use
 
-        # Encode the audio to the requested format
+            audio_tensor, sr = engine.synthesize(
+                text=chunk_text,
+                audio_prompt_path=str(audio_prompt_path),
+                temperature=get_gen_default_temperature(),
+                exaggeration=get_gen_default_exaggeration(),
+                cfg_weight=get_gen_default_cfg_weight(),
+                seed=chunk_seed,
+                language=get_gen_default_language(),
+            )
+
+            if audio_tensor is None or sr is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"TTS engine failed to synthesize audio for chunk {i+1}.",
+                )
+
+            if engine_sr is None:
+                engine_sr = sr
+
+            if request.speed != 1.0:
+                audio_tensor, _ = utils.apply_speed_factor(audio_tensor, sr, request.speed)
+
+            chunk_np = audio_tensor.cpu().numpy().squeeze().astype(np.float32)
+            all_audio_segments_np.append(chunk_np)
+
+        # Stitch chunks together with crossfading
+        if len(all_audio_segments_np) == 1:
+            final_audio_np = all_audio_segments_np[0]
+        else:
+            CROSSFADE_MS = 20
+            SENTENCE_PAUSE_MS = 200
+            fade_samples = int(CROSSFADE_MS / 1000 * engine_sr)
+            silence_buffer_samples = int(SENTENCE_PAUSE_MS / 1000 * engine_sr) + (fade_samples * 2)
+
+            result = all_audio_segments_np[0].astype(np.float32)
+            for seg in all_audio_segments_np[1:]:
+                seg = seg.astype(np.float32)
+                silence = np.zeros(silence_buffer_samples, dtype=np.float32)
+                result = _crossfade_with_overlap(result, silence, fade_samples)
+                result = _crossfade_with_overlap(result, seg, fade_samples)
+            final_audio_np = result
+            logger.info(
+                f"OpenAI speech: stitched {len(all_audio_segments_np)} chunks with {CROSSFADE_MS}ms crossfades"
+            )
+
+        # Normalize to prevent clipping
+        peak = np.abs(final_audio_np).max()
+        if peak > 0.99:
+            final_audio_np = final_audio_np * (0.95 / peak)
+
         encoded_audio = utils.encode_audio(
-            audio_array=audio_np,
-            sample_rate=sr,
+            audio_array=final_audio_np,
+            sample_rate=engine_sr,
             output_format=request.response_format,
             target_sample_rate=get_audio_sample_rate(),
         )
@@ -1333,7 +1377,6 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
         if encoded_audio is None:
             raise HTTPException(status_code=500, detail="Failed to encode audio.")
 
-        # Determine the media type
         media_type = f"audio/{request.response_format}"
 
         # Optional: Save to disk if enabled
@@ -1370,7 +1413,6 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
                     status_code=500, detail=f"Failed to save audio file: {e}"
                 )
 
-        # Return the streaming response
         return StreamingResponse(io.BytesIO(encoded_audio), media_type=media_type)
 
     except Exception as e:

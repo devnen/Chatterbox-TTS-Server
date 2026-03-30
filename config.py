@@ -394,16 +394,21 @@ class YamlConfigManager:
             # If an existing config file exists, back it up.
             if CONFIG_FILE_PATH.exists():
                 try:
-                    shutil.move(str(CONFIG_FILE_PATH), str(backup_file))
+                    shutil.copy2(str(CONFIG_FILE_PATH), str(backup_file))
                     logger.debug(f"Backed up existing configuration to {backup_file}")
                 except Exception as backup_error:
-                    logger.warning(
+                    logger.debug(
                         f"Could not create backup of {CONFIG_FILE_PATH}: {backup_error}"
                     )
-                    # Proceed with saving, but warn about missing backup.
+                    # Non-fatal: proceed with saving even without a backup.
 
-            # Rename the temporary file to the actual configuration file.
-            shutil.move(str(temp_file), str(CONFIG_FILE_PATH))
+            # Replace the config file with the new content.
+            # Use copy+remove instead of move for compatibility with Docker bind mounts.
+            shutil.copy2(str(temp_file), str(CONFIG_FILE_PATH))
+            try:
+                os.remove(str(temp_file))
+            except OSError:
+                pass  # Temp file cleanup is best-effort
             logger.info(f"Configuration successfully saved to {CONFIG_FILE_PATH}")
             return True
 
@@ -421,7 +426,7 @@ class YamlConfigManager:
             # Attempt to restore from backup if the save operation failed.
             if backup_file.exists() and not CONFIG_FILE_PATH.exists():
                 try:
-                    shutil.move(str(backup_file), str(CONFIG_FILE_PATH))
+                    shutil.copy2(str(backup_file), str(CONFIG_FILE_PATH))
                     logger.info(
                         f"Restored configuration from backup {backup_file} due to save failure."
                     )
