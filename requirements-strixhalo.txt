@@ -1,0 +1,30 @@
+# requirements.txt
+
+# Chatterbox TTS engine - Install from chatterbox-v2 fork
+chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master
+
+# Core Web Framework
+fastapi
+uvicorn[standard]
+
+# Machine Learning & Audio
+numpy>=1.24.0,<1.26.0  # Match chatterbox-v2 requirements
+soundfile # Requires libsndfile system library (e.g., sudo apt-get install libsndfile1 on Debian/Ubuntu)
+huggingface_hub
+descript-audio-codec
+safetensors
+
+# Configuration & Utilities
+pydantic
+python-dotenv # Used ONLY for initial config seeding if config.yaml missing
+Jinja2
+python-multipart # For file uploads
+requests # For health checks or other potential uses
+PyYAML # For parsing presets.yaml AND primary config.yaml
+tqdm
+
+# Audio Post-processing
+pydub
+praat-parselmouth # For unvoiced segment removal
+librosa # for changes to sampling
+hf-transfer

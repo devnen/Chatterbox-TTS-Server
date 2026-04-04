@@ -3,6 +3,7 @@
 
 import gc
 import logging
+import os
 import random
 import numpy as np
 import torch
@@ -38,7 +39,8 @@ from config import config_manager
 
 logger = logging.getLogger(__name__)
 
-# Log Turbo availability status at module load time
+# Log BF16 setting at module load so it's visible in startup logs
+# (BF16_ENABLED is resolved after logger is set up — logged in initialize_tts_model)
 if TURBO_AVAILABLE:
     logger.info("ChatterboxTurboTTS is available in the installed chatterbox package.")
 else:
@@ -79,6 +81,25 @@ TURBO_PARALINGUISTIC_TAGS = [
     "shush",
 ]
 
+# --- BF16 optimization flag ---
+# TTS_BF16: controls whether T3/S3Gen are converted to bfloat16 and whether
+# autocast is used during inference.
+#   auto (default) — enable only if torch.cuda.is_bf16_supported()
+#   on / 1 / true  — force-enable (assumes hardware supports it)
+#   off / 0 / false — disable even if hardware supports it
+def _resolve_bf16_setting() -> bool:
+    val = os.environ.get("TTS_BF16", "auto").strip().lower()
+    if val in ("off", "0", "false"):
+        return False
+    if val in ("on", "1", "true"):
+        return True
+    # auto: detect at runtime
+    if torch.cuda.is_available():
+        return torch.cuda.is_bf16_supported()
+    return False
+
+BF16_ENABLED: bool = _resolve_bf16_setting()
+
 # --- Global Module Variables ---
 chatterbox_model: Optional[ChatterboxTTS] = None
 MODEL_LOADED: bool = False
@@ -89,6 +110,18 @@ model_device: Optional[str] = (
 # Track which model type is loaded
 loaded_model_type: Optional[str] = None  # "original" or "turbo"
 loaded_model_class_name: Optional[str] = None  # "ChatterboxTTS" or "ChatterboxTurboTTS"
+
+# Voice conditioning cache: avoids re-encoding the same voice file on every request.
+# Key: (resolved_path, file_mtime, exaggeration) — mtime invalidates if file changes.
+_conds_cache: dict = {}
+
+
+def _conds_cache_key(path: str, exaggeration: float) -> tuple:
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = 0.0
+    return (path, mtime, exaggeration)
 
 
 def set_seed(seed_value: int):
@@ -307,6 +340,10 @@ def load_model() -> bool:
 
         model_device = resolved_device_str
         logger.info(f"Final device selection: {model_device}")
+        logger.info(
+            f"BF16 optimization: {'enabled' if BF16_ENABLED else 'disabled'} "
+            f"(TTS_BF16={os.environ.get('TTS_BF16', 'auto')})"
+        )
 
         # Get the model selector from config
         model_selector = config_manager.get_string("model.repo_id", "chatterbox-turbo")
@@ -328,6 +365,17 @@ def load_model() -> bool:
 
             # Load the model using from_pretrained - handles HuggingFace downloads automatically
             chatterbox_model = model_class.from_pretrained(device=model_device)
+
+            # Convert T3 to bfloat16 if enabled.
+            # Token generation is memory-bandwidth bound; bf16 halves bytes read per
+            # forward pass. S3Gen is intentionally kept in float32 — it runs only
+            # 2 CFM timesteps and bf16 causes token/mask size mismatches.
+            if BF16_ENABLED:
+                if hasattr(chatterbox_model, "t3"):
+                    chatterbox_model.t3 = chatterbox_model.t3.bfloat16()
+                    logger.info("T3 model converted to bfloat16 for faster token generation.")
+            else:
+                logger.info("BF16 optimization disabled (TTS_BF16=off or hardware unsupported).")
 
             # Store model metadata
             loaded_model_type = model_type
@@ -423,25 +471,45 @@ def synthesize(
             f"language={language}"
         )
 
-        # Call the core model's generate method
-        # Multilingual model requires language_id parameter
-        if loaded_model_type == "multilingual":
-            wav_tensor = chatterbox_model.generate(
-                text=text,
-                language_id=language,
-                audio_prompt_path=audio_prompt_path,
-                temperature=temperature,
-                exaggeration=exaggeration,
-                cfg_weight=cfg_weight,
-            )
-        else:
-            wav_tensor = chatterbox_model.generate(
-                text=text,
-                audio_prompt_path=audio_prompt_path,
-                temperature=temperature,
-                exaggeration=exaggeration,
-                cfg_weight=cfg_weight,
-            )
+        # Voice conditioning cache: skip re-encoding the same voice file.
+        # Turbo ignores exaggeration in conds; others include it in the key.
+        effective_prompt = audio_prompt_path
+        conds_key = None
+        if audio_prompt_path and hasattr(chatterbox_model, "conds"):
+            ex_for_key = 0.0 if loaded_model_type == "turbo" else exaggeration
+            conds_key = _conds_cache_key(audio_prompt_path, ex_for_key)
+            if conds_key in _conds_cache:
+                chatterbox_model.conds = _conds_cache[conds_key]
+                effective_prompt = None  # conds already set, skip prepare_conditionals
+                logger.debug(f"Voice cache hit: {audio_prompt_path}")
+
+        # Call the core model's generate method.
+        # autocast promotes float32 inputs to bfloat16 to match T3/S3Gen weights,
+        # keeping numerically sensitive ops (softmax, norms) in float32 automatically.
+        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16_ENABLED):
+            if loaded_model_type == "multilingual":
+                wav_tensor = chatterbox_model.generate(
+                    text=text,
+                    language_id=language,
+                    audio_prompt_path=effective_prompt,
+                    temperature=temperature,
+                    exaggeration=exaggeration,
+                    cfg_weight=cfg_weight,
+                )
+            else:
+                wav_tensor = chatterbox_model.generate(
+                    text=text,
+                    audio_prompt_path=effective_prompt,
+                    temperature=temperature,
+                    exaggeration=exaggeration,
+                    cfg_weight=cfg_weight,
+                )
+
+        # Store conds in cache after first compute for this voice.
+        if conds_key is not None and effective_prompt is not None:
+            if chatterbox_model.conds is not None:
+                _conds_cache[conds_key] = chatterbox_model.conds
+                logger.debug(f"Cached voice conditionals for: {audio_prompt_path}")
 
         # The ChatterboxTTS.generate method already returns a CPU tensor.
         return wav_tensor, chatterbox_model.sr
@@ -507,7 +575,7 @@ def reload_model() -> bool:
     Returns:
         bool: True if the new model loaded successfully, False otherwise.
     """
-    global chatterbox_model, MODEL_LOADED, model_device, loaded_model_type, loaded_model_class_name
+    global chatterbox_model, MODEL_LOADED, model_device, loaded_model_type, loaded_model_class_name, _conds_cache
 
     logger.info("Initiating model hot-swap/reload sequence...")
 
@@ -517,10 +585,12 @@ def reload_model() -> bool:
         del chatterbox_model
         chatterbox_model = None
 
-    # 2. Reset state flags
+    # 2. Reset state flags and clear voice cache (conds are model-specific)
     MODEL_LOADED = False
     loaded_model_type = None
     loaded_model_class_name = None
+    _conds_cache.clear()
+    logger.info("Voice conditioning cache cleared.")
 
     # 3. Force Python Garbage Collection
     gc.collect()
