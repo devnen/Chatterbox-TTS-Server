@@ -1293,3 +1293,29 @@ class PerformanceMonitor:
         if self.logger:
             self.logger.log(log_level, full_report_str)
         return full_report_str
+
+
+def safe_resolve_within(base_dir: Path, filename: str) -> Path:
+    """
+    Safely resolve a user-supplied filename within a base directory.
+    Prevents path traversal by ensuring the resolved path stays within base_dir.
+
+    Args:
+        base_dir: The trusted base directory.
+        filename: The user-supplied filename (should be a plain filename, not a path).
+
+    Returns:
+        The resolved Path within base_dir.
+
+    Raises:
+        ValueError: If the resolved path escapes the base directory.
+    """
+    # Strip any directory components — only use the basename
+    safe_name = Path(filename).name
+    if not safe_name:
+        raise ValueError("Invalid filename: empty after sanitization.")
+    resolved = (base_dir / safe_name).resolve()
+    base_resolved = base_dir.resolve()
+    if not str(resolved).startswith(str(base_resolved) + os.sep) and resolved != base_resolved:
+        raise ValueError(f"Path traversal detected: '{filename}' resolves outside the allowed directory.")
+    return resolved

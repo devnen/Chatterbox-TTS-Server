@@ -880,7 +880,10 @@ async def custom_tts_endpoint(
                 detail="Missing 'predefined_voice_id' for 'predefined' voice mode.",
             )
         voices_dir = get_predefined_voices_path(ensure_absolute=True)
-        potential_path = voices_dir / request.predefined_voice_id
+        try:
+            potential_path = utils.safe_resolve_within(voices_dir, request.predefined_voice_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid predefined voice ID.")
         if not potential_path.is_file():
             logger.error(f"Predefined voice file not found: {potential_path}")
             raise HTTPException(
@@ -897,7 +900,10 @@ async def custom_tts_endpoint(
                 detail="Missing 'reference_audio_filename' for 'clone' voice mode.",
             )
         ref_dir = get_reference_audio_path(ensure_absolute=True)
-        potential_path = ref_dir / request.reference_audio_filename
+        try:
+            potential_path = utils.safe_resolve_within(ref_dir, request.reference_audio_filename)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid reference audio filename.")
         if not potential_path.is_file():
             logger.error(
                 f"Reference audio file for cloning not found: {potential_path}"
@@ -1275,8 +1281,11 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
     # Determine the audio prompt path based on the voice parameter
     predefined_voices_path = get_predefined_voices_path(ensure_absolute=True)
     reference_audio_path = get_reference_audio_path(ensure_absolute=True)
-    voice_path_predefined = predefined_voices_path / request.voice
-    voice_path_reference = reference_audio_path / request.voice
+    try:
+        voice_path_predefined = utils.safe_resolve_within(predefined_voices_path, request.voice)
+        voice_path_reference = utils.safe_resolve_within(reference_audio_path, request.voice)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid voice parameter.")
 
     if voice_path_predefined.is_file():
         audio_prompt_path = voice_path_predefined
