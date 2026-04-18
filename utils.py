@@ -57,6 +57,27 @@ except ImportError:
 
 
 # --- Filename Sanitization ---
+
+def validate_safe_path(base_dir: Path, filename: str) -> Path:
+    """
+    Validate that a user-supplied filename resolves to a path within base_dir.
+    Raises ValueError if the resolved path escapes the base directory.
+    """
+    if not filename:
+        raise ValueError("Filename must not be empty.")
+    # Reject any path separators (both Unix and Windows style)
+    if '/' in filename or '\\' in filename:
+        raise ValueError(f"Invalid filename: {filename!r}")
+    # Use only the basename to strip any directory components
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename or safe_name in ('.', '..'):
+        raise ValueError(f"Invalid filename: {filename!r}")
+    resolved = (base_dir / safe_name).resolve()
+    base_resolved = base_dir.resolve()
+    if not str(resolved).startswith(str(base_resolved) + os.sep) and resolved != base_resolved:
+        raise ValueError(f"Path escapes base directory: {filename!r}")
+    return resolved
+
 def sanitize_filename(filename: str) -> str:
     """
     Removes potentially unsafe characters and path components from a filename
