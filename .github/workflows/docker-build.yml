@@ -13,7 +13,6 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -27,45 +26,48 @@ jobs:
             tag-suffix: nvidia
             platforms: linux/amd64
             build-args: RUNTIME=nvidia
+            runner: ubuntu-latest
 
           # NVIDIA CUDA 12.8 Blackwell
           - dockerfile: Dockerfile.cu128
             tag-suffix: cu128
             platforms: linux/amd64
             build-args: RUNTIME=nvidia
+            runner: ubuntu-latest
 
           # NVIDIA CUDA 13.0 Blackwell sm121 (ARM64)
           - dockerfile: Dockerfile.cu130
             tag-suffix: cu130
             platforms: linux/arm64
             build-args: RUNTIME=nvidia
+            runner: ubuntu-24.04-arm
 
           # AMD ROCm
           - dockerfile: Dockerfile.rocm
             tag-suffix: rocm
             platforms: linux/amd64
             build-args: ""
+            runner: ubuntu-latest
 
-          # AMD Strix Halo ROCM
+          # AMD Strix Halo ROCm
           - dockerfile: Dockerfile.strixhalo
             tag-suffix: strixhalo
             platforms: linux/amd64
             build-args: ""
+            runner: ubuntu-latest
 
           # CPU only
           - dockerfile: Dockerfile.cpu
             tag-suffix: cpu
             platforms: linux/amd64
             build-args: ""
+            runner: ubuntu-latest
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
