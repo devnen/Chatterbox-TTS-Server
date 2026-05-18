@@ -80,6 +80,7 @@ class OpenAISpeechRequest(BaseModel):
     response_format: Literal["wav", "opus", "mp3"] = "wav"  # Add "mp3"
     speed: float = 1.0
     seed: Optional[int] = None
+    language: Optional[str] = None
 
 
 # --- Logging Configuration ---
@@ -1447,7 +1448,7 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
                 exaggeration=get_gen_default_exaggeration(),
                 cfg_weight=get_gen_default_cfg_weight(),
                 seed=chunk_seed,
-                language=get_gen_default_language(),
+                language=request.language or get_gen_default_language(),
             )
 
             if audio_tensor is None or sr is None:
