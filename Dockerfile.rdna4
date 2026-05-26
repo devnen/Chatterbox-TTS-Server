@@ -22,17 +22,21 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
 
-# Copy requirements - use strixhalo.txt for app deps, rdna4-init.txt for ROCm torch
+# Self-contained RDNA4 requirements (no dependency on other requirements files)
 COPY requirements-rdna4-init.txt ./requirements-rdna4-init.txt
-COPY requirements-strixhalo.txt ./requirements-strixhalo.txt
+COPY requirements-rdna4.txt ./requirements-rdna4.txt
 
-# Install in two steps: app deps first, then force-reinstall ROCm torch on top
+# Install order mirrors Dockerfile.rocm: ROCm torch first, then app deps,
+# then chatterbox with --no-deps to prevent pip from replacing ROCm torch
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -r requirements-strixhalo.txt && \
-    python3 -m pip install --no-cache-dir --force-reinstall -r requirements-rdna4-init.txt
+    python3 -m pip install --no-cache-dir -r requirements-rdna4-init.txt && \
+    python3 -m pip install --no-cache-dir -r requirements-rdna4.txt && \
+    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0 && \
+    python3 -m pip install --no-cache-dir "protobuf>=4.25.0"
 
-# Patch s3tokenizer: cast numpy wav to float32 (numpy defaults to float64,
-# which causes float64 STFT → float64 mel → assertion failure with torch 2.9+)
+# Patches for torch 2.9+ compatibility (required when using ROCm 7.2 wheels):
+# s3tokenizer: numpy defaults to float64; cast to float32 to avoid
+# float64 STFT → float64 mel → assertion failure
 RUN sed -i \
     's/wav = torch\.from_numpy(wav)$/wav = torch.from_numpy(wav).float()/' \
     /usr/local/lib/python3.10/dist-packages/chatterbox/models/s3tokenizer/s3tokenizer.py && \
@@ -40,7 +44,7 @@ RUN sed -i \
     's/mel_spec = self\._mel_filters\.to(self\.device) @ magnitudes/mel_spec = self._mel_filters.to(self.device).to(magnitudes.dtype) @ magnitudes/' \
     /usr/local/lib/python3.10/dist-packages/chatterbox/models/s3tokenizer/s3tokenizer.py
 
-# Patch voice_encoder: melspectrogram() returns float64 → LSTM requires float32
+# voice_encoder: melspectrogram() returns float64 → LSTM requires float32
 RUN sed -i \
     's/utt_embeds = self\.inference(mels\.to(self\.device),/utt_embeds = self.inference(mels.to(self.device).float(),/' \
     /usr/local/lib/python3.10/dist-packages/chatterbox/models/voice_encoder/voice_encoder.py

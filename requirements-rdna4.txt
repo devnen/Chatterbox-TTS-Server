@@ -1,0 +1,53 @@
+# requirements-rdna4.txt
+#
+# AMD RDNA4 (gfx1201) application dependencies for Chatterbox TTS Server.
+# For RX 9070 / RX 9070 XT / Radeon AI PRO R9700 on Linux with ROCm 7.2+.
+#
+# PyTorch (torch, torchaudio, torchvision, triton) are installed separately
+# via requirements-rdna4-init.txt using AMD's ROCm 7.2 manylinux wheels.
+# rocm6.1 wheels do NOT support gfx1201 — ROCm 7.2+ is required.
+#
+# Manual installation order:
+#   pip install -r requirements-rdna4-init.txt
+#   pip install -r requirements-rdna4.txt
+#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+#
+# The --no-deps flag on chatterbox-tts is critical: without it, pip will
+# replace the ROCm torch wheels with CPU-only versions from PyPI.
+
+# Chatterbox Dependencies (explicit, since --no-deps skips them)
+# NOTE: s3tokenizer and onnx are installed with --no-deps alongside chatterbox
+# to avoid protobuf version conflicts.
+conformer==0.3.2
+diffusers==0.29.0
+transformers==4.46.3
+einops>=0.7.0
+omegaconf==2.3.0
+resampy==0.4.3
+resemble-perth==1.0.1
+
+# Core Web Framework
+fastapi>=0.100.0,<0.116.0
+uvicorn[standard]>=0.27.0
+
+# Machine Learning & Audio
+numpy>=1.24.0
+soundfile>=0.12.0
+huggingface_hub>=0.20.0
+descript-audio-codec==1.0.0
+safetensors>=0.4.0
+
+# Configuration & Utilities
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+Jinja2>=3.1.2,<3.2.0
+python-multipart>=0.0.5
+requests>=2.28.0
+PyYAML>=6.0
+tqdm>=4.65.0
+
+# Audio Post-processing
+pydub>=0.25.0
+praat-parselmouth>=0.4.0
+librosa>=0.10.0
+hf-transfer>=0.1.4

@@ -31,7 +31,7 @@ services:
       - HF_TOKEN=YOUR_TOKEN_HERE
       - TTS_ENGINE_DEVICE=cuda
       # gfx1201 (RDNA4) is natively supported by ROCm 7.0+.
-      # HSA_OVERRIDE_GFX_VERSION is NOT set here — it is not needed with the ROCm 7.2
+      # HSA_OVERRIDE_GFX_VERSION is NOT set here — it is not needed with the ROCm 7.2.3
       # Docker image and may cause crashes if set when the GPU is already natively detected.
       # It is only needed for tools that bundle an older ROCm runtime without gfx1201 support
       # (e.g. some ollama/LM Studio builds).

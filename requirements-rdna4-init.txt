@@ -1,18 +1,18 @@
 # requirements-rdna4-init.txt
 #
-# ROCm 7.2 PyTorch stack for RDNA4 (gfx1201 / RX 9070 / RX 9070 XT / R9700)
+# ROCm 7.2.3 PyTorch stack for RDNA4 (gfx1201 / RX 9070 / RX 9070 XT / R9700)
 #
 # NOTE: gfx1201 is natively supported by ROCm 7.0+ — no HSA_OVERRIDE needed.
 #       rocm6.1 wheels do NOT support gfx1201; ROCm 7.2+ is required.
 #
-# Uses AMD's official manylinux wheels (same build series as Strix Halo).
-# MUST be force-reinstalled AFTER requirements-strixhalo.txt to pin ROCm torch.
+# Uses AMD's official manylinux wheels from rocm-rel-7.2.3.
 #
 # Manual install:
-#   pip install -r requirements-strixhalo.txt
-#   pip install --force-reinstall -r requirements-rdna4-init.txt
+#   pip install -r requirements-rdna4-init.txt
+#   pip install -r requirements-rdna4.txt
+#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
 
-https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2/triton-3.5.1%2Brocm7.2.0.gita272dfa8-cp310-cp310-linux_x86_64.whl
-https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2/torch-2.9.1%2Brocm7.2.0.lw.git7e1940d4-cp310-cp310-linux_x86_64.whl
-https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2/torchvision-0.24.0%2Brocm7.2.0.gitb919bd0c-cp310-cp310-linux_x86_64.whl
-https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2/torchaudio-2.9.0%2Brocm7.2.0.gite3c6ee2b-cp310-cp310-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.3/triton-3.5.1%2Brocm7.2.3.gita272dfa8-cp310-cp310-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.3/torch-2.9.1%2Brocm7.2.3.lw.gitebc02d69-cp310-cp310-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.3/torchvision-0.24.0%2Brocm7.2.3.gitb919bd0c-cp310-cp310-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.3/torchaudio-2.9.0%2Brocm7.2.3.gite3c6ee2b-cp310-cp310-linux_x86_64.whl
