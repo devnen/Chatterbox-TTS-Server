@@ -272,6 +272,7 @@ This server application enhances the underlying `chatterbox-tts` engine with the
 | NVIDIA DGX Spark / GB10 (sm_121) | Docker only | requirements-nvidia-cu130.txt (torch 2.10, CUDA 13.0) | 580+ |
 | AMD RX 6000/7000 (Linux) | `--rocm` | requirements-rocm.txt | ROCm 6.4+ |
 | AMD Strix Halo (Ryzen AI MAX+) | Docker only | requirements-strixhalo.txt (ROCm 7.2) | ROCm 7.2+ |
+| AMD RX 9000 series / RDNA4 (Linux) | Docker only | requirements-rdna4-init.txt (ROCm 7.2) | ROCm 7.2+ |
 | Apple Silicon (M1/M2/M3/M4) | Manual install | See Option 4 | macOS 12.3+ |
 
 ---
@@ -719,6 +720,27 @@ docker compose -f docker-compose-strixhalo.yml up -d
 ```
 
 The compose file sets `HSA_OVERRIDE_GFX_VERSION=11.0.0` and `HSA_XNACK=1` so the ROCm 7.2 wheels work on Strix Halo's GFX 11.5.0 silicon, and enables `TTS_BF16=on` for the throughput win on this hardware.
+
+---
+
+### **Option 6: AMD RDNA4 (RX 9070 / RX 9070 XT / R9700) Installation**
+
+> **Note:** For AMD **RDNA4 discrete GPUs** (RX 9070, RX 9070 XT, Radeon AI PRO R9700, gfx1201).
+> ROCm 6.1 wheels do **not** support gfx1201 — ROCm 7.2 is required. Standard discrete Radeon GPUs (RX 6000/7000) use Option 3.
+
+**Prerequisites:**
+- AMD RDNA4 GPU (RX 9070 / 9070 XT / R9700) on Linux
+- ROCm 7.2+ stack installed on the host (see [ROCm install guide](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/))
+- User in `video` and `render` groups: `sudo usermod -aG video,render $USER`
+
+**Using Docker (recommended):**
+```bash
+docker compose -f docker-compose-rdna4.yml up -d
+
+# Access the web UI at http://localhost:8004
+```
+
+The compose file sets `ROCBLAS_USE_HIPBLASLT=0` (required for stability on gfx1201) and enables `TTS_BF16=on` for throughput gain. gfx1201 is natively supported by ROCm 7.0+ — no `HSA_OVERRIDE_GFX_VERSION` needed.
 
 ---
 
@@ -1255,6 +1277,7 @@ lspci | grep VGA
 ```
 
 **Common GPU Architecture Mappings:**
+- **RX 9070 / 9070 XT / R9700 (gfx1201, RDNA4):** Natively supported by ROCm 7.0+. Use `docker-compose-rdna4.yml` — **no `HSA_OVERRIDE_GFX_VERSION` needed**. Setting it when the GPU is natively detected may cause crashes. Only set `HSA_OVERRIDE_GFX_VERSION=12.0.1` if using a tool that bundles its own older ROCm runtime without gfx1201 support (e.g. some ollama or LM Studio builds).
 - **Ryzen AI Max+ 395 (Strix Halo), RX 7900 XTX/XT, RX 7800 XT, RX 7700 XT:** gfx1100/gfx1150 → Use `HSA_OVERRIDE_GFX_VERSION=11.0.0`
 - **RX 6900 XT, RX 6800 XT, RX 6700 XT, RX 6600 XT:** gfx1030-1032 → Use `HSA_OVERRIDE_GFX_VERSION=10.3.0`
 - **RX 5700 XT, RX 5600 XT:** gfx1010 → Use `HSA_OVERRIDE_GFX_VERSION=10.3.0`
