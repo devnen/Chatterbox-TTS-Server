@@ -374,7 +374,6 @@ python start.py --reinstall
 # Upgrade to latest version (keeps your hardware selection)
 python start.py --upgrade
 
-```bash
 # Install with verbose output for troubleshooting
 python start.py --reinstall --nvidia --verbose
 
@@ -386,9 +385,6 @@ python start.py --reinstall --portable
 
 # Force standard virtual environment (skip portable prompt)
 python start.py --no-portable
-```
-
-#### Subsequent Runs
 ```
 
 #### Subsequent Runs
