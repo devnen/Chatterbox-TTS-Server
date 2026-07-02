@@ -12,8 +12,6 @@ from typing import Optional
 import unittest
 from unittest.mock import patch
 
-from msgpack import fallback
-from sympy import false
 from utils import chunk_text_by_sentences, config_manager
 
 
@@ -92,7 +90,7 @@ CHUNK_COUNT_CASES = [
         hard_limit_factor=4.0,
     ),
     ChunkCountCase(
-        id="Original example text with five star issue",
+        id="original_example_text_with_five_star_issue",
         text=("""Note also that this fic has my characters having strong opinions about Cerberus and the Citadel Council. Some of those opinions are actually shared by the author. Some are not, but my characters would believe them anyway. And some things in this fic are drawn directly from canon, and some other things absolutely are not. So vigorous canon nitpicking is neither necessary nor desired – just assume the author already knows most of it and wrote the story their way anyway. This is a fanfic, after all.
 
 * * * * *
@@ -120,8 +118,8 @@ A tall redheaded teenaged girl with a smear of dirt on her cheek straightened up
         expected_chunks=8,
     ),
     ChunkCountCase(
-        id="Original text with dash issue",
-        text=""""KNOCK KNOCK MOTHERFUCKERS, WHO ORDERED A BEATING?" 
+        id="original_text_with_dash_issue",
+        text=""""KNOCK KNOCK WHO ORDERED A BEATING?" 
   Several blocks away, Lady Photon paused in the middle of shaping her force fields into a corral and tilted her head. "Did you hear something?""Nope," Glory Girl shamelessly lied. "I've no idea what you're talking about."  The reaction time for your average human is 0.25 seconds. A quarter of a second for your eyes to see something, report back to your brain, and your brain to decide what to do about it.That time can be stretched surprisingly far when your brain keeps going wait, no, it's a what?' to your eyes instead of doing its job.I burst into the factory yard, angry electric guitars screaming in my loudspeakers. My comms detected an active security network - I set my EWF package on it and every single active camera feed in the building dissolved into useless static, motion sensors firing randomly.
  FADING, FALLING, LOST IN FOREVER - 
 ABB gangers moved as if in slow motion, still reeling from the explosions - explosions going across the compound because if I  could  task my AI drones with setting off every safe' charge they could find, why the fuck not, let Bakuda think we were coming from all directions at once. My tactical network sung in the back of my head, a constant stream of data. Lifesigns collated with weapon-shapes, threat assessment, detected charges, estimated yields and areas-of-effect, target priorities - a thousand different things, my accelerated mind hyperaware of every single one of them. 
