@@ -1046,7 +1046,11 @@ def _hard_split_segment(segment_text: str, max_len: int) -> List[str]:
     remaining = segment_text.strip()
 
     while len(remaining) > max_len:
-        split_at = remaining.rfind(" ", 0, max_len + 1)
+        split_at = max(
+            remaining.rfind(" ", 0, max_len + 1),
+            remaining.rfind("\n", 0, max_len + 1),
+            remaining.rfind("\t", 0, max_len + 1),
+        )
         if split_at <= 0:
             split_at = max_len
 
