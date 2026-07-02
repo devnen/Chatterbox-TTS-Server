@@ -211,6 +211,8 @@ POTENTIAL_END_PATTERN = re.compile(r'([.!?])(["\']?)(\s+|$)')
 # dashes at end-of-phrase (e.g. "wait that sounds lewd)-\n\nWithin...") do
 # not get treated as a single huge bullet item. See issue #144.
 BULLET_POINT_PATTERN = re.compile(r"(?:^|\n)([-•*]|\d+\.)[ \t]+")
+# Markdown-style divider lines (***, * * *, ---, ___) should behave like hard paragraph breaks.
+DIVIDER_LINE_PATTERN = re.compile(r"(?m)^[ \t]*(?:[*_\-][ \t]*){3,}$")
 # Placeholder for non-verbal cues or special instructions within text (e.g., (laughs), (sighs)).
 NON_VERBAL_CUE_PATTERN = re.compile(r"(\([\w\s'-]+\))")
 
@@ -939,6 +941,18 @@ def split_into_sentences(text: str) -> List[str]:
         return []
 
     text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # Treat symbol-only divider lines as hard paragraph separators.
+    text = DIVIDER_LINE_PATTERN.sub("\n\n", text)
+
+    # If explicit paragraph breaks exist, split by paragraph first so decorative
+    # separators do not glue unrelated prose into one giant sentence.
+    paragraph_segments = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+    if len(paragraph_segments) > 1:
+        paragraph_sentences: List[str] = []
+        for paragraph in paragraph_segments:
+            paragraph_sentences.extend(split_into_sentences(paragraph))
+        return [s for s in paragraph_sentences if s]
+
     bullet_point_matches = list(BULLET_POINT_PATTERN.finditer(text))
 
     if len(bullet_point_matches) >= 2:
@@ -1023,6 +1037,56 @@ def _preprocess_and_segment_text(full_text: str) -> List[Tuple[Optional[str], st
     return segmented_with_tags
 
 
+def _hard_split_segment(segment_text: str, max_len: int) -> List[str]:
+    """Fallback splitter for long segments when sentence boundaries are unavailable."""
+    if max_len <= 0 or len(segment_text) <= max_len:
+        return [segment_text]
+
+    parts: List[str] = []
+    remaining = segment_text.strip()
+
+    while len(remaining) > max_len:
+        split_at = max(
+            remaining.rfind(" ", 0, max_len + 1),
+            remaining.rfind("\n", 0, max_len + 1),
+            remaining.rfind("\t", 0, max_len + 1),
+        )
+        if split_at <= 0:
+            split_at = max_len
+
+        part = remaining[:split_at].strip()
+        if part:
+            parts.append(part)
+
+        # Ensure progress even when whitespace is absent.
+        remaining = remaining[split_at:].lstrip()
+
+    if remaining:
+        parts.append(remaining)
+    return parts
+
+
+def _get_chunking_hard_limit(chunk_size: int) -> Optional[int]:
+    """Resolve optional hard split threshold from config; returns None when disabled."""
+    fallback_enabled = config_manager.get_bool(
+        "text_chunking.enable_hard_limit_fallback", False
+    )
+    if not fallback_enabled:
+        return None
+
+    factor = config_manager.get_float("text_chunking.hard_limit_factor", 4.0)
+    if factor <= 0:
+        logger.warning(
+            f"Invalid text_chunking.hard_limit_factor={factor}. Falling back to 4.0."
+        )
+        factor = 4.0
+
+    hard_limit = int(round(chunk_size * factor))
+    if hard_limit < chunk_size:
+        hard_limit = chunk_size
+    return hard_limit
+
+
 def chunk_text_by_sentences(
     full_text: str,
     chunk_size: int,
@@ -1048,6 +1112,26 @@ def chunk_text_by_sentences(
     processed_segments = _preprocess_and_segment_text(full_text)
     if not processed_segments:
         return []
+
+    # Optional hard fallback split for oversized single segments. Disabled by default.
+    hard_limit = None
+    if chunk_size != float("inf"):
+        hard_limit = _get_chunking_hard_limit(int(chunk_size))
+
+    if hard_limit is not None:
+        expanded_segments: List[Tuple[Optional[str], str]] = []
+        for tag, segment_text in processed_segments:
+            if len(segment_text) > hard_limit:
+                split_parts = _hard_split_segment(segment_text, hard_limit)
+                if len(split_parts) > 1:
+                    logger.info(
+                        f"Fallback-split oversized segment from {len(segment_text)} chars into {len(split_parts)} part(s) "
+                        f"using hard_limit={hard_limit}."
+                    )
+                expanded_segments.extend((tag, part) for part in split_parts if part)
+            else:
+                expanded_segments.append((tag, segment_text))
+        processed_segments = expanded_segments
 
     text_chunks: List[str] = []
     current_chunk_sentences: List[str] = []

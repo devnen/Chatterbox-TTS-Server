@@ -80,6 +80,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "speed_factor": 1.0,  # Controls the speed of the generated speech.
         "language": "en",  # Default language for TTS.
     },
+    "text_chunking": {
+        "enable_hard_limit_fallback": False,  # Off by default for backward compatibility.
+        "hard_limit_factor": 4.0,  # Effective hard limit is chunk_size * factor when enabled.
+    },
     "audio_output": {  # Settings related to the format of generated audio.
         "format": "wav",  # Output audio format (e.g., 'wav', 'mp3').
         "sample_rate": 24000,  # Sample rate of the output audio in Hz.
