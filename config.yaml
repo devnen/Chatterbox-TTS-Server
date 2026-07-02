@@ -25,6 +25,9 @@ generation_defaults:
   seed: 0
   speed_factor: 1.0
   language: en
+text_chunking:
+  enable_hard_limit_fallback: false
+  hard_limit_factor: 4.0
 audio_output:
   format: wav
   sample_rate: 24000
