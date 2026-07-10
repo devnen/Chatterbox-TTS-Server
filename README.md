@@ -505,12 +505,13 @@ This is the most straightforward option and works on any machine without a compa
 # Make sure your (venv) is active
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+pip install --no-deps --force-reinstall "protobuf>=4.25.0"
 ```
 
 <details>
 <summary><strong>💡 How This Works</strong></summary>
-The `requirements.txt` file installs CPU PyTorch and all server dependencies. Chatterbox is installed separately with `--no-deps` to prevent pip from pulling in conflicting torch versions or triggering ONNX source builds.
+The `requirements.txt` file installs CPU PyTorch and all server dependencies. Chatterbox is installed separately with `--no-deps` to prevent pip from pulling in conflicting torch versions or triggering ONNX source builds. The `s3tokenizer`/`onnx`/`protobuf` pins are required regardless of install type — `start.py`'s `install_chatterbox_no_deps()` step needs them, and omitting them causes `ModuleNotFoundError: No module named 's3tokenizer'` at server startup.
 </details>
 
 ---
