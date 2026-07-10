@@ -525,7 +525,8 @@ For users with NVIDIA GPUs. This provides the best performance for RTX 20/30/40 
 # Make sure your (venv) is active
 pip install --upgrade pip
 pip install -r requirements-nvidia.txt
-pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+pip install --no-deps --force-reinstall "protobuf>=4.25.0"
 ```
 
 **After installation, verify that PyTorch can see your GPU:**
@@ -568,7 +569,8 @@ pip install --upgrade pip
 pip install -r requirements-nvidia-cu128.txt
 
 # Step 2: Install chatterbox without dependencies (prevents PyTorch downgrade)
-pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+pip install --no-deps --force-reinstall "protobuf>=4.25.0"
 ```
 
 ⚠️ **Critical:** The `--no-deps` flag is required to prevent PyTorch from being downgraded to a version that doesn't support Blackwell GPUs.
@@ -1135,9 +1137,11 @@ The primary endpoint for TTS generation is `/tts`. The OpenAI-compatible `/v1/au
 ```bash
 curl -X POST http://localhost:8004/tts \
   -H "Content-Type: application/json" \
-  -d '{"text":"The first chunk arrives quickly, the rest stream behind.","stream":true}' \
+  -d '{"text":"The first chunk arrives quickly, the rest stream behind.","predefined_voice_id":"Emily.wav","stream":true}' \
   --output stream.wav
 ```
+> **Note:** `predefined_voice_id` is required when `voice_mode` is left at its default (`"predefined"`) — the server returns `400 Missing 'predefined_voice_id' for 'predefined' voice mode.` without it. Use any filename from `voices/` (e.g. `Emily.wav`), or set `"voice_mode":"clone"` with `reference_audio_filename` instead.
+
 # 🐳 Docker Installation
 
 Run Chatterbox TTS Server easily using Docker. The recommended method uses Docker Compose, which is pre-configured for different GPU types.
