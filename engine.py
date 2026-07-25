@@ -5,6 +5,7 @@ import gc
 import logging
 import os
 import random
+from collections import OrderedDict
 import numpy as np
 import torch
 from typing import Optional, Tuple
@@ -114,7 +115,43 @@ loaded_model_class_name: Optional[str] = None  # "ChatterboxTTS" or "ChatterboxT
 
 # Voice conditioning cache: avoids re-encoding the same voice file on every request.
 # Key: (resolved_path, file_mtime, exaggeration) — mtime invalidates if file changes.
-_conds_cache: dict = {}
+#
+# Bounded, because each entry pins GPU tensors for the process lifetime and this
+# was previously an unbounded dict cleared only by unload_model(). Measured on a
+# P106-100 (5.93 GiB) with chatterbox-turbo: cycling 28 reference voices grew
+# live tensors from 4.09 to 5.46 GiB and left 0.11 GiB of headroom, after which
+# 406 of 453 requests failed. The same load with one voice ran clean.
+#
+# This is not only a small-card concern. /upload_reference stores each uploaded
+# file under its own path, so every distinct voice a deployment ever serves mints
+# a permanent key — a larger card buys a higher ceiling, not a different outcome.
+#
+# CONDS_CACHE_MAX bounds the entry count. Measured cost is ~175 MB of VRAM per
+# entry (live tensors grew 1.37 GiB across exactly 8 cached voices), so this is a
+# far more expensive cache than it looks — budget it against free VRAM, not
+# against an entry count that sounds small.
+#
+# The default of 4 costs ~700 MB, which leaves a 6 GB card ~1.1 GiB for
+# generation after the 4.09 GiB model. On a 12 GB card 16+ is comfortable. Set 0
+# to disable caching and re-encode the voice on every request.
+_CONDS_CACHE_MAX: int = max(0, int(os.environ.get("CONDS_CACHE_MAX", "4")))
+_conds_cache: "OrderedDict[tuple, object]" = OrderedDict()
+
+
+def _conds_cache_store(key: tuple, conds) -> None:
+    """Insert under an LRU bound, evicting the least recently used entries.
+
+    Eviction drops the last reference to that entry's tensors; the caching
+    allocator reuses the freed blocks, so VRAM is recovered without an explicit
+    empty_cache() on the request path.
+    """
+    if _CONDS_CACHE_MAX == 0:
+        return
+    _conds_cache[key] = conds
+    _conds_cache.move_to_end(key)
+    while len(_conds_cache) > _CONDS_CACHE_MAX:
+        evicted_key, _ = _conds_cache.popitem(last=False)
+        logger.debug(f"Voice cache evicted (LRU, max={_CONDS_CACHE_MAX}): {evicted_key[0]}")
 
 
 def _conds_cache_key(path: str, exaggeration: float) -> tuple:
@@ -481,6 +518,9 @@ def synthesize(
             conds_key = _conds_cache_key(audio_prompt_path, ex_for_key)
             if conds_key in _conds_cache:
                 chatterbox_model.conds = _conds_cache[conds_key]
+                # Refresh recency, or the LRU bound would evict by insertion order
+                # and throw away the hottest voice under a rotating workload.
+                _conds_cache.move_to_end(conds_key)
                 effective_prompt = None  # conds already set, skip prepare_conditionals
                 logger.debug(f"Voice cache hit: {audio_prompt_path}")
 
@@ -509,7 +549,7 @@ def synthesize(
         # Store conds in cache after first compute for this voice.
         if conds_key is not None and effective_prompt is not None:
             if chatterbox_model.conds is not None:
-                _conds_cache[conds_key] = chatterbox_model.conds
+                _conds_cache_store(conds_key, chatterbox_model.conds)
                 logger.debug(f"Cached voice conditionals for: {audio_prompt_path}")
 
         # The ChatterboxTTS.generate method already returns a CPU tensor.
