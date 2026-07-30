@@ -1125,7 +1125,7 @@ async def custom_tts_endpoint(
     for i, chunk in enumerate(text_chunks):
         logger.info(f"Synthesizing chunk {i+1}/{len(text_chunks)}...")
         try:
-            if batched_wavs is not None:
+            if batched_wavs is not None and i < len(batched_wavs):
                 chunk_audio_tensor, chunk_sr_from_engine = batched_wavs[i], batched_sr
             else:
                 chunk_audio_tensor, chunk_sr_from_engine = engine.synthesize(

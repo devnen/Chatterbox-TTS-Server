@@ -552,20 +552,29 @@ def batching_available(text_count: int, seed: int) -> bool:
 
 
 def _resolve_conds(audio_prompt_path: Optional[str], exaggeration: float):
-    """Set chatterbox_model.conds for this voice, using the cache when possible."""
+    """Return the Conditionals for this voice, using the cache when possible.
+
+    Returns the object rather than leaving the caller to read
+    chatterbox_model.conds back: that attribute is shared process-wide, so a
+    concurrent request can reassign it between the two statements and the batch
+    would generate in the wrong voice. Holding a local reference sidesteps that
+    entirely — the batch uses the conds it resolved, whatever else touches the
+    model meanwhile.
+    """
     if not audio_prompt_path or not hasattr(chatterbox_model, "conds"):
-        return
+        return None
     ex_for_key = 0.0 if loaded_model_type == "turbo" else exaggeration
     conds_key = _conds_cache_key(audio_prompt_path, ex_for_key)
     cached = _conds_cache_get(conds_key)
     if cached is not None:
-        chatterbox_model.conds = cached
         logger.debug(f"Voice cache hit (batch): {audio_prompt_path}")
-        return
+        return cached
     chatterbox_model.prepare_conditionals(audio_prompt_path, exaggeration=exaggeration)
-    if chatterbox_model.conds is not None:
-        _conds_cache_store(conds_key, chatterbox_model.conds)
+    conds = chatterbox_model.conds
+    if conds is not None:
+        _conds_cache_store(conds_key, conds)
         logger.debug(f"Cached voice conditionals (batch) for: {audio_prompt_path}")
+    return conds
 
 
 def warmup_batch(audio_prompt_path: Optional[str]) -> bool:
@@ -621,13 +630,12 @@ def synthesize_batch(
         from chatterbox.tts_turbo import punc_norm, S3GEN_SIL
 
         model = chatterbox_model
-        _resolve_conds(audio_prompt_path, exaggeration)
-        if getattr(model, "conds", None) is None:
+        conds = _resolve_conds(audio_prompt_path, exaggeration)
+        if conds is None:
             logger.warning("Batch synthesis has no voice conditionals; falling back.")
             return None, None
 
         stop_token = model.t3.hp.stop_speech_token
-        conds = model.conds
         wavs: List[torch.Tensor] = []
 
         for start in range(0, len(texts), TTS_BATCH_SIZE):
@@ -679,6 +687,14 @@ def synthesize_batch(
                 wav_np = wav.squeeze(0).detach().cpu().numpy()
                 wav_np = model.watermarker.apply_watermark(wav_np, sample_rate=model.sr)
                 wavs.append(torch.from_numpy(wav_np).unsqueeze(0))
+
+        # Callers index this list per chunk, so a short list would be an
+        # IndexError rather than a graceful fallback. Refuse instead.
+        if len(wavs) != len(texts):
+            logger.error(
+                f"Batch produced {len(wavs)} wav(s) for {len(texts)} chunk(s); falling back."
+            )
+            return None, None
 
         logger.info(
             f"Batched {len(texts)} chunk(s) in "
