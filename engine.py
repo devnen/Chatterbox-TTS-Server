@@ -5,9 +5,12 @@ import gc
 import logging
 import os
 import random
+import threading
+import time
+from collections import OrderedDict
 import numpy as np
 import torch
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
 
 from chatterbox.tts import ChatterboxTTS  # Main TTS engine class
@@ -114,7 +117,78 @@ loaded_model_class_name: Optional[str] = None  # "ChatterboxTTS" or "ChatterboxT
 
 # Voice conditioning cache: avoids re-encoding the same voice file on every request.
 # Key: (resolved_path, file_mtime, exaggeration) — mtime invalidates if file changes.
-_conds_cache: dict = {}
+#
+# Bounded, because each entry pins GPU tensors for the process lifetime and this
+# was previously an unbounded dict cleared only by unload_model(). Measured on a
+# P106-100 (5.93 GiB) with chatterbox-turbo: cycling 28 reference voices grew
+# live tensors from 4.09 to 5.46 GiB and left 0.11 GiB of headroom, after which
+# 406 of 453 requests failed. The same load with one voice ran clean.
+#
+# This is not only a small-card concern. /upload_reference stores each uploaded
+# file under its own path, so every distinct voice a deployment ever serves mints
+# a permanent key — a larger card buys a higher ceiling, not a different outcome.
+#
+# CONDS_CACHE_MAX bounds the entry count. Measured cost is ~175 MB of VRAM per
+# entry (live tensors grew 1.37 GiB across exactly 8 cached voices), so this is a
+# far more expensive cache than it looks — budget it against free VRAM, not
+# against an entry count that sounds small.
+#
+# The default of 4 costs ~700 MB, which leaves a 6 GB card ~1.1 GiB for
+# generation after the 4.09 GiB model. On a 12 GB card 16+ is comfortable. Set 0
+# to disable caching and re-encode the voice on every request.
+def _resolve_conds_cache_max() -> int:
+    """Read CONDS_CACHE_MAX, tolerating garbage rather than failing to import."""
+    raw = os.environ.get("CONDS_CACHE_MAX", "4").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        logger.warning(
+            f"CONDS_CACHE_MAX={raw!r} is not an integer; using the default of 4."
+        )
+        return 4
+
+
+_CONDS_CACHE_MAX: int = _resolve_conds_cache_max()
+_conds_cache: "OrderedDict[tuple, object]" = OrderedDict()
+
+# synthesize() runs concurrently: server.py dispatches it through
+# loop.run_in_executor(), so several threads can touch this cache at once.
+# Reads are two steps (look up, then refresh recency) and writes are three
+# (insert, refresh, evict), none of which are atomic — without this lock a
+# thread can evict a key between another thread's lookup and its use, raising
+# KeyError. The unbounded version could not hit this because nothing was ever
+# removed.
+_conds_cache_lock = threading.Lock()
+
+
+def _conds_cache_get(key: tuple):
+    """Return cached conds for `key` and mark it most-recently-used, else None."""
+    if _CONDS_CACHE_MAX == 0:
+        return None
+    with _conds_cache_lock:
+        conds = _conds_cache.get(key)
+        if conds is not None:
+            _conds_cache.move_to_end(key)
+        return conds
+
+
+def _conds_cache_store(key: tuple, conds) -> None:
+    """Insert under an LRU bound, evicting the least recently used entries.
+
+    Eviction drops the last reference to that entry's tensors; the caching
+    allocator reuses the freed blocks, so VRAM is recovered without an explicit
+    empty_cache() on the request path.
+    """
+    if _CONDS_CACHE_MAX == 0:
+        return
+    with _conds_cache_lock:
+        _conds_cache[key] = conds
+        _conds_cache.move_to_end(key)
+        while len(_conds_cache) > _CONDS_CACHE_MAX:
+            evicted_key, _ = _conds_cache.popitem(last=False)
+            logger.debug(
+                f"Voice cache evicted (LRU, max={_CONDS_CACHE_MAX}): {evicted_key[0]}"
+            )
 
 
 def _conds_cache_key(path: str, exaggeration: float) -> tuple:
@@ -424,6 +498,216 @@ def load_model() -> bool:
         return False
 
 
+# --- Chunk batching -----------------------------------------------------------
+# Turbo's decode loop (T3.inference_turbo) is written with batch dimensions
+# throughout and uses HuggingFace logits processors, which are batch-correct.
+# Measured on a P106-100, batching identical-voice chunks scales well and costs
+# almost no VRAM, because the weights dominate and only the KV cache grows:
+#
+#     batch   T3 time   s/item   speedup   peak VRAM
+#       1      0.98s     0.976    1.00x      4.50 GiB
+#       2      1.15s     0.575    1.70x      4.62 GiB
+#       4      1.75s     0.438    2.23x      4.84 GiB
+#       8      2.76s     0.346    2.82x      5.29 GiB
+#
+# /tts already splits long text into chunks that all share one voice, so those
+# chunks can go through a single forward pass with no cross-request queueing and
+# no added latency. TTS_BATCH_SIZE caps it; 4 is the defensible ceiling on a 6 GB
+# card (batch 8 leaves only ~0.6 GiB, and real chunks are longer than the short
+# test strings above).
+def _resolve_batch_size() -> int:
+    raw = os.environ.get("TTS_BATCH_SIZE", "4").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        logger.warning(f"TTS_BATCH_SIZE={raw!r} is not an integer; using 4.")
+        return 4
+
+
+TTS_BATCH_SIZE: int = _resolve_batch_size()
+
+# Token ids at or above this are out-of-vocabulary for s3gen; turbo's own
+# generate() filters on the same constant.
+_S3GEN_TOKEN_LIMIT = 6561
+
+
+def batching_available(text_count: int, seed: int) -> bool:
+    """Whether synthesize_batch() can serve this request.
+
+    Declines rather than silently changing behaviour when:
+      - the model is not turbo (only inference_turbo takes a batch),
+      - there is nothing to gain (one chunk, or batching disabled),
+      - a seed was requested. Sequential chunks each re-seed from the same value,
+        while a batch draws all rows from one generator, so seeded output would
+        stop being reproducible. Reproducibility wins over speed here.
+    """
+    return (
+        MODEL_LOADED
+        and chatterbox_model is not None
+        and loaded_model_type == "turbo"
+        and TTS_BATCH_SIZE > 1
+        and text_count > 1
+        and seed == 0
+    )
+
+
+def _resolve_conds(audio_prompt_path: Optional[str], exaggeration: float):
+    """Return the Conditionals for this voice, using the cache when possible.
+
+    Returns the object rather than leaving the caller to read
+    chatterbox_model.conds back: that attribute is shared process-wide, so a
+    concurrent request can reassign it between the two statements and the batch
+    would generate in the wrong voice. Holding a local reference sidesteps that
+    entirely — the batch uses the conds it resolved, whatever else touches the
+    model meanwhile.
+    """
+    if not audio_prompt_path or not hasattr(chatterbox_model, "conds"):
+        return None
+    ex_for_key = 0.0 if loaded_model_type == "turbo" else exaggeration
+    conds_key = _conds_cache_key(audio_prompt_path, ex_for_key)
+    cached = _conds_cache_get(conds_key)
+    if cached is not None:
+        logger.debug(f"Voice cache hit (batch): {audio_prompt_path}")
+        return cached
+    chatterbox_model.prepare_conditionals(audio_prompt_path, exaggeration=exaggeration)
+    conds = chatterbox_model.conds
+    if conds is not None:
+        _conds_cache_store(conds_key, conds)
+        logger.debug(f"Cached voice conditionals (batch) for: {audio_prompt_path}")
+    return conds
+
+
+def warmup_batch(audio_prompt_path: Optional[str]) -> bool:
+    """Pay the one-time batched-kernel setup cost at startup instead of on a request.
+
+    The first batched forward pass on a cold process costs ~10s on a P106-100
+    while CUDA selects and loads kernels for a batch dimension the model has not
+    seen. Measured: 13.5s first call, then 2.8s steady state. The cost is one-time
+    and NOT per-shape — after warming at batch 2, fresh batch sizes of 3 and 4 ran
+    at full speed — so a single small warmup covers every later batch.
+
+    Without this the first real multi-chunk request eats the whole penalty, which
+    would read as a latency regression rather than a speedup.
+    """
+    if not batching_available(text_count=2, seed=0) or not audio_prompt_path:
+        return False
+    try:
+        started = time.time()
+        wavs, _ = synthesize_batch(
+            texts=["Warming up the batched path.", "Second row for the batch."],
+            audio_prompt_path=audio_prompt_path,
+        )
+        if wavs is None:
+            logger.warning("Batch warmup did not run; first batched request will be slow.")
+            return False
+        logger.info(f"Batched path warmed in {time.time() - started:.1f}s.")
+        return True
+    except Exception as e:
+        logger.warning(f"Batch warmup failed ({e}); first batched request will be slow.")
+        return False
+
+
+def synthesize_batch(
+    texts: List[str],
+    audio_prompt_path: Optional[str] = None,
+    temperature: float = 0.8,
+    exaggeration: float = 0.5,
+    cfg_weight: float = 0.5,
+    seed: int = 0,
+    language: str = "en",
+) -> Tuple[Optional[List[torch.Tensor]], Optional[int]]:
+    """Synthesize several texts sharing one voice in batched forward passes.
+
+    Returns (list of wav tensors aligned with `texts`, sample_rate), or
+    (None, None) if batching does not apply or fails — callers must fall back to
+    per-item synthesize() on None rather than surfacing an error.
+    """
+    if not batching_available(len(texts), seed):
+        return None, None
+
+    try:
+        # Imported here so a non-turbo install never needs these symbols.
+        from chatterbox.tts_turbo import punc_norm, S3GEN_SIL
+
+        model = chatterbox_model
+        conds = _resolve_conds(audio_prompt_path, exaggeration)
+        if conds is None:
+            logger.warning("Batch synthesis has no voice conditionals; falling back.")
+            return None, None
+
+        stop_token = model.t3.hp.stop_speech_token
+        wavs: List[torch.Tensor] = []
+
+        for start in range(0, len(texts), TTS_BATCH_SIZE):
+            group = texts[start : start + TTS_BATCH_SIZE]
+            encoded = model.tokenizer(
+                [punc_norm(t) for t in group],
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
+            text_tokens = encoded.input_ids.to(model.device)
+
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16_ENABLED):
+                all_tokens = model.t3.inference_turbo(
+                    t3_cond=conds.t3,
+                    text_tokens=text_tokens,
+                    temperature=temperature,
+                )
+
+            for row_idx in range(all_tokens.size(0)):
+                row = all_tokens[row_idx]
+                # inference_turbo only breaks once EVERY row has emitted stop, so
+                # rows that finished early keep sampling. Those trailing tokens are
+                # below the OOV limit and would survive the filter as audible
+                # gibberish, so truncate at the first stop before filtering.
+                hit = (row == stop_token).nonzero()
+                if hit.numel():
+                    row = row[: hit[0, 0]]
+                row = row[row < _S3GEN_TOKEN_LIMIT]
+                if row.numel() == 0:
+                    logger.warning(
+                        f"Batch row {start + row_idx} produced no usable tokens; falling back."
+                    )
+                    return None, None
+
+                silence = torch.tensor(
+                    [S3GEN_SIL] * 3, dtype=torch.long, device=model.device
+                )
+                row = torch.cat([row, silence])
+
+                # s3gen runs per row: it accepted a batch in testing, but only with
+                # equal-length token sequences, and real chunks differ in length.
+                # Padding plus masking would be needed to batch this stage safely,
+                # and T3 decode dominates the cost anyway.
+                with torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16_ENABLED):
+                    wav, _ = model.s3gen.inference(
+                        speech_tokens=row, ref_dict=conds.gen, n_cfm_timesteps=2
+                    )
+                wav_np = wav.squeeze(0).detach().cpu().numpy()
+                wav_np = model.watermarker.apply_watermark(wav_np, sample_rate=model.sr)
+                wavs.append(torch.from_numpy(wav_np).unsqueeze(0))
+
+        # Callers index this list per chunk, so a short list would be an
+        # IndexError rather than a graceful fallback. Refuse instead.
+        if len(wavs) != len(texts):
+            logger.error(
+                f"Batch produced {len(wavs)} wav(s) for {len(texts)} chunk(s); falling back."
+            )
+            return None, None
+
+        logger.info(
+            f"Batched {len(texts)} chunk(s) in "
+            f"{(len(texts) + TTS_BATCH_SIZE - 1) // TTS_BATCH_SIZE} pass(es) "
+            f"(batch size {TTS_BATCH_SIZE})."
+        )
+        return wavs, model.sr
+
+    except Exception as e:
+        logger.error(f"Batched synthesis failed, falling back: {e}", exc_info=True)
+        return None, None
+
+
 def synthesize(
     text: str,
     audio_prompt_path: Optional[str] = None,
@@ -479,8 +763,11 @@ def synthesize(
         if audio_prompt_path and hasattr(chatterbox_model, "conds"):
             ex_for_key = 0.0 if loaded_model_type == "turbo" else exaggeration
             conds_key = _conds_cache_key(audio_prompt_path, ex_for_key)
-            if conds_key in _conds_cache:
-                chatterbox_model.conds = _conds_cache[conds_key]
+            # Single locked lookup that also refreshes recency — checking
+            # membership and then indexing would race with eviction.
+            cached_conds = _conds_cache_get(conds_key)
+            if cached_conds is not None:
+                chatterbox_model.conds = cached_conds
                 effective_prompt = None  # conds already set, skip prepare_conditionals
                 logger.debug(f"Voice cache hit: {audio_prompt_path}")
 
@@ -509,7 +796,7 @@ def synthesize(
         # Store conds in cache after first compute for this voice.
         if conds_key is not None and effective_prompt is not None:
             if chatterbox_model.conds is not None:
-                _conds_cache[conds_key] = chatterbox_model.conds
+                _conds_cache_store(conds_key, chatterbox_model.conds)
                 logger.debug(f"Cached voice conditionals for: {audio_prompt_path}")
 
         # The ChatterboxTTS.generate method already returns a CPU tensor.
@@ -590,7 +877,8 @@ def reload_model() -> bool:
     MODEL_LOADED = False
     loaded_model_type = None
     loaded_model_class_name = None
-    _conds_cache.clear()
+    with _conds_cache_lock:
+        _conds_cache.clear()
     logger.info("Voice conditioning cache cleared.")
 
     # 3. Force Python Garbage Collection

@@ -159,6 +159,19 @@ async def lifespan(app: FastAPI):
             )
         else:
             logger.info("TTS Model loaded successfully via engine.")
+
+            # Pay the one-time batched-kernel setup cost now rather than on the
+            # first multi-chunk request, which would otherwise take ~10s longer
+            # than an unbatched one and look like a regression. No-op unless the
+            # loaded model supports batching.
+            try:
+                voices_dir = get_predefined_voices_path(ensure_absolute=True)
+                warm_voice = next(iter(sorted(voices_dir.glob("*.wav"))), None)
+                if warm_voice is not None:
+                    engine.warmup_batch(str(warm_voice))
+            except Exception as warm_exc:
+                logger.warning(f"Skipped batch warmup: {warm_exc}")
+
             host_address = get_host()
             server_port = get_port()
             browser_thread = threading.Thread(
@@ -1068,40 +1081,62 @@ async def custom_tts_endpoint(
         )
     # --- End streaming fork ---
 
+    # Resolve generation parameters once — the batched and per-chunk paths below
+    # both use these values.
+    _prompt_for_engine = (
+        str(audio_prompt_path_for_engine) if audio_prompt_path_for_engine else None
+    )
+    _temperature = (
+        request.temperature
+        if request.temperature is not None
+        else get_gen_default_temperature()
+    )
+    _exaggeration = (
+        request.exaggeration
+        if request.exaggeration is not None
+        else get_gen_default_exaggeration()
+    )
+    _cfg_weight = (
+        request.cfg_weight
+        if request.cfg_weight is not None
+        else get_gen_default_cfg_weight()
+    )
+    _seed = request.seed if request.seed is not None else get_gen_default_seed()
+    _language = (
+        request.language if request.language is not None else get_gen_default_language()
+    )
+
+    # Chunk batching: every chunk of this request shares one voice, so turbo can
+    # generate them in a single forward pass (~2.2x at batch 4, measured on a
+    # P106-100). Returns None when batching does not apply — non-turbo model, a
+    # seeded request, or a single chunk — leaving the per-chunk path unchanged.
+    batched_wavs, batched_sr = engine.synthesize_batch(
+        texts=text_chunks,
+        audio_prompt_path=_prompt_for_engine,
+        temperature=_temperature,
+        exaggeration=_exaggeration,
+        cfg_weight=_cfg_weight,
+        seed=_seed,
+        language=_language,
+    )
+    if batched_wavs is not None:
+        perf_monitor.record(f"Engine batch-synthesized {len(text_chunks)} chunk(s)")
+
     for i, chunk in enumerate(text_chunks):
         logger.info(f"Synthesizing chunk {i+1}/{len(text_chunks)}...")
         try:
-            chunk_audio_tensor, chunk_sr_from_engine = engine.synthesize(
-                text=chunk,
-                audio_prompt_path=(
-                    str(audio_prompt_path_for_engine)
-                    if audio_prompt_path_for_engine
-                    else None
-                ),
-                temperature=(
-                    request.temperature
-                    if request.temperature is not None
-                    else get_gen_default_temperature()
-                ),
-                exaggeration=(
-                    request.exaggeration
-                    if request.exaggeration is not None
-                    else get_gen_default_exaggeration()
-                ),
-                cfg_weight=(
-                    request.cfg_weight
-                    if request.cfg_weight is not None
-                    else get_gen_default_cfg_weight()
-                ),
-                seed=(
-                    request.seed if request.seed is not None else get_gen_default_seed()
-                ),
-                language=(
-                    request.language
-                    if request.language is not None
-                    else get_gen_default_language()
-                ),
-            )
+            if batched_wavs is not None and i < len(batched_wavs):
+                chunk_audio_tensor, chunk_sr_from_engine = batched_wavs[i], batched_sr
+            else:
+                chunk_audio_tensor, chunk_sr_from_engine = engine.synthesize(
+                    text=chunk,
+                    audio_prompt_path=_prompt_for_engine,
+                    temperature=_temperature,
+                    exaggeration=_exaggeration,
+                    cfg_weight=_cfg_weight,
+                    seed=_seed,
+                    language=_language,
+                )
             perf_monitor.record(f"Engine synthesized chunk {i+1}")
 
             if chunk_audio_tensor is None or chunk_sr_from_engine is None:
