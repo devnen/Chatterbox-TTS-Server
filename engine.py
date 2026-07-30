@@ -5,6 +5,7 @@ import gc
 import logging
 import os
 import random
+import threading
 from collections import OrderedDict
 import numpy as np
 import torch
@@ -134,8 +135,40 @@ loaded_model_class_name: Optional[str] = None  # "ChatterboxTTS" or "ChatterboxT
 # The default of 4 costs ~700 MB, which leaves a 6 GB card ~1.1 GiB for
 # generation after the 4.09 GiB model. On a 12 GB card 16+ is comfortable. Set 0
 # to disable caching and re-encode the voice on every request.
-_CONDS_CACHE_MAX: int = max(0, int(os.environ.get("CONDS_CACHE_MAX", "4")))
+def _resolve_conds_cache_max() -> int:
+    """Read CONDS_CACHE_MAX, tolerating garbage rather than failing to import."""
+    raw = os.environ.get("CONDS_CACHE_MAX", "4").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        logger.warning(
+            f"CONDS_CACHE_MAX={raw!r} is not an integer; using the default of 4."
+        )
+        return 4
+
+
+_CONDS_CACHE_MAX: int = _resolve_conds_cache_max()
 _conds_cache: "OrderedDict[tuple, object]" = OrderedDict()
+
+# synthesize() runs concurrently: server.py dispatches it through
+# loop.run_in_executor(), so several threads can touch this cache at once.
+# Reads are two steps (look up, then refresh recency) and writes are three
+# (insert, refresh, evict), none of which are atomic — without this lock a
+# thread can evict a key between another thread's lookup and its use, raising
+# KeyError. The unbounded version could not hit this because nothing was ever
+# removed.
+_conds_cache_lock = threading.Lock()
+
+
+def _conds_cache_get(key: tuple):
+    """Return cached conds for `key` and mark it most-recently-used, else None."""
+    if _CONDS_CACHE_MAX == 0:
+        return None
+    with _conds_cache_lock:
+        conds = _conds_cache.get(key)
+        if conds is not None:
+            _conds_cache.move_to_end(key)
+        return conds
 
 
 def _conds_cache_store(key: tuple, conds) -> None:
@@ -147,11 +180,14 @@ def _conds_cache_store(key: tuple, conds) -> None:
     """
     if _CONDS_CACHE_MAX == 0:
         return
-    _conds_cache[key] = conds
-    _conds_cache.move_to_end(key)
-    while len(_conds_cache) > _CONDS_CACHE_MAX:
-        evicted_key, _ = _conds_cache.popitem(last=False)
-        logger.debug(f"Voice cache evicted (LRU, max={_CONDS_CACHE_MAX}): {evicted_key[0]}")
+    with _conds_cache_lock:
+        _conds_cache[key] = conds
+        _conds_cache.move_to_end(key)
+        while len(_conds_cache) > _CONDS_CACHE_MAX:
+            evicted_key, _ = _conds_cache.popitem(last=False)
+            logger.debug(
+                f"Voice cache evicted (LRU, max={_CONDS_CACHE_MAX}): {evicted_key[0]}"
+            )
 
 
 def _conds_cache_key(path: str, exaggeration: float) -> tuple:
@@ -516,11 +552,11 @@ def synthesize(
         if audio_prompt_path and hasattr(chatterbox_model, "conds"):
             ex_for_key = 0.0 if loaded_model_type == "turbo" else exaggeration
             conds_key = _conds_cache_key(audio_prompt_path, ex_for_key)
-            if conds_key in _conds_cache:
-                chatterbox_model.conds = _conds_cache[conds_key]
-                # Refresh recency, or the LRU bound would evict by insertion order
-                # and throw away the hottest voice under a rotating workload.
-                _conds_cache.move_to_end(conds_key)
+            # Single locked lookup that also refreshes recency — checking
+            # membership and then indexing would race with eviction.
+            cached_conds = _conds_cache_get(conds_key)
+            if cached_conds is not None:
+                chatterbox_model.conds = cached_conds
                 effective_prompt = None  # conds already set, skip prepare_conditionals
                 logger.debug(f"Voice cache hit: {audio_prompt_path}")
 
@@ -630,7 +666,8 @@ def reload_model() -> bool:
     MODEL_LOADED = False
     loaded_model_type = None
     loaded_model_class_name = None
-    _conds_cache.clear()
+    with _conds_cache_lock:
+        _conds_cache.clear()
     logger.info("Voice conditioning cache cleared.")
 
     # 3. Force Python Garbage Collection
