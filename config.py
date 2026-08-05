@@ -49,6 +49,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "log_file_backup_count": 5,  # Number of backup log files to keep.
         "ssl_certfile": None,  # Path to SSL certificate file for HTTPS. None = HTTP only.
         "ssl_keyfile": None,  # Path to SSL private key file for HTTPS. None = HTTP only.
+        # Defer model loading until the first TTS request instead of loading at
+        # startup. Keeps VRAM free on an idle server; the first request pays the
+        # load cost. Set False to restore eager startup loading.
+        "lazy_load_model": True,
+        # Minutes of inactivity after which the model is unloaded and its VRAM
+        # released. The next request reloads it automatically. 0 disables.
+        "model_idle_timeout_minutes": 20,
     },
     "model": {  # Added section for model source configuration
         "repo_id": "chatterbox-turbo",  # UPDATED: Default to Turbo model

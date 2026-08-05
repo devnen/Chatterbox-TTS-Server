@@ -5,6 +5,9 @@ import gc
 import logging
 import os
 import random
+import threading
+import time
+from contextlib import contextmanager
 import numpy as np
 import torch
 from typing import Optional, Tuple
@@ -115,6 +118,15 @@ loaded_model_class_name: Optional[str] = None  # "ChatterboxTTS" or "ChatterboxT
 # Voice conditioning cache: avoids re-encoding the same voice file on every request.
 # Key: (resolved_path, file_mtime, exaggeration) — mtime invalidates if file changes.
 _conds_cache: dict = {}
+
+# --- Model lifecycle state ---
+# Guards every load/unload transition so a lazy load triggered by one request
+# cannot race another, and so the idle monitor never unloads mid-generation.
+_lifecycle_lock = threading.RLock()
+_active_requests: int = 0  # in-flight syntheses; the idle monitor waits these out
+_last_used_at: float = time.monotonic()
+_idle_monitor_thread: Optional[threading.Thread] = None
+_idle_timeout_seconds: float = 0.0
 
 
 def _conds_cache_key(path: str, exaggeration: float) -> tuple:
@@ -263,6 +275,8 @@ def get_model_info() -> dict:
         "supported_languages": (
             SUPPORTED_LANGUAGES if loaded_model_type == "multilingual" else {"en": "English"}
         ),
+        # Lifecycle detail so the UI can show residency and the unload countdown.
+        "idle": get_idle_status(),
     }
 
 
@@ -413,6 +427,9 @@ def load_model() -> bool:
             MODEL_LOADED = False
             return False
 
+        # Start the idle clock from the moment the weights land, so a model that
+        # loads and is never used still gets released.
+        _refresh_last_used()
         return True
 
     except Exception as e:
@@ -424,7 +441,155 @@ def load_model() -> bool:
         return False
 
 
-def synthesize(
+def _refresh_last_used() -> None:
+    """Reset the idle clock. Called on every load and every synthesis."""
+    global _last_used_at
+    _last_used_at = time.monotonic()
+
+
+def ensure_model_loaded() -> bool:
+    """Load the configured model if it is not currently resident.
+
+    This is what lets generation survive a lazy start or an idle unload: instead
+    of failing with "model not loaded", the caller pays the load cost once. Safe
+    under concurrency — the lock means a second caller waits for the first
+    caller's load rather than starting a competing one.
+
+    Returns:
+        bool: True if a model is resident when this returns.
+    """
+    with _lifecycle_lock:
+        if MODEL_LOADED and chatterbox_model is not None:
+            _refresh_last_used()
+            return True
+
+        logger.info("No model resident — loading on demand...")
+        started = time.monotonic()
+        success = load_model()
+        if success:
+            logger.info(
+                f"On-demand load completed in {time.monotonic() - started:.1f}s."
+            )
+            _refresh_last_used()
+        else:
+            logger.error("On-demand model load failed.")
+        return success
+
+
+@contextmanager
+def model_in_use():
+    """Mark a synthesis as in flight so the idle monitor leaves the model alone.
+
+    The counter is what stops the monitor unloading the weights out from under a
+    request that is midway through generating.
+    """
+    global _active_requests
+    with _lifecycle_lock:
+        _active_requests += 1
+        _refresh_last_used()
+    try:
+        yield
+    finally:
+        with _lifecycle_lock:
+            _active_requests = max(0, _active_requests - 1)
+            _refresh_last_used()
+
+
+def _idle_monitor_loop(check_interval: float) -> None:
+    """Background loop that releases the model once it has gone unused."""
+    while True:
+        time.sleep(check_interval)
+        try:
+            with _lifecycle_lock:
+                if not MODEL_LOADED or _active_requests > 0:
+                    continue
+                idle_for = time.monotonic() - _last_used_at
+                if idle_for < _idle_timeout_seconds:
+                    continue
+                logger.info(
+                    f"Model idle for {idle_for / 60:.1f} min "
+                    f"(timeout {_idle_timeout_seconds / 60:.0f} min) — unloading to free VRAM."
+                )
+                unload_model()
+        except Exception:
+            # A failure here must not kill the thread, or idle unloading would
+            # silently stop working for the rest of the process's life.
+            logger.error("Idle monitor iteration failed.", exc_info=True)
+
+
+def start_idle_monitor(timeout_minutes: float, check_interval: float = 30.0) -> bool:
+    """Start (or retune) the background idle-unload monitor.
+
+    Args:
+        timeout_minutes: Idle minutes before the model is released. 0 disables.
+        check_interval: Seconds between checks.
+
+    Returns:
+        bool: True if the monitor is running when this returns.
+    """
+    global _idle_monitor_thread, _idle_timeout_seconds
+
+    with _lifecycle_lock:
+        _idle_timeout_seconds = max(0.0, float(timeout_minutes)) * 60.0
+
+        if _idle_timeout_seconds <= 0:
+            logger.info("Idle model unloading is disabled (timeout set to 0).")
+            return False
+
+        if _idle_monitor_thread is not None and _idle_monitor_thread.is_alive():
+            logger.info(
+                f"Idle monitor already running; timeout updated to {timeout_minutes:g} min."
+            )
+            return True
+
+        _idle_monitor_thread = threading.Thread(
+            target=_idle_monitor_loop,
+            args=(check_interval,),
+            name="model-idle-monitor",
+            daemon=True,
+        )
+        _idle_monitor_thread.start()
+        logger.info(
+            f"Idle monitor started: model unloads after {timeout_minutes:g} min of inactivity."
+        )
+        return True
+
+
+def get_idle_status() -> dict:
+    """Idle/lifecycle detail for the UI and API."""
+    with _lifecycle_lock:
+        idle_for = time.monotonic() - _last_used_at
+        countdown = None
+        if MODEL_LOADED and _idle_timeout_seconds > 0 and _active_requests == 0:
+            countdown = max(0.0, round(_idle_timeout_seconds - idle_for, 1))
+        return {
+            "idle_timeout_minutes": round(_idle_timeout_seconds / 60.0, 2),
+            "idle_seconds": round(idle_for, 1) if MODEL_LOADED else None,
+            "seconds_until_unload": countdown,
+            "active_requests": _active_requests,
+        }
+
+
+def synthesize(*args, **kwargs) -> Tuple[Optional[torch.Tensor], Optional[int]]:
+    """
+    Synthesizes audio from text. See `_synthesize_impl` for the parameters.
+
+    This wrapper holds the in-use count for the whole generation, which stops the
+    idle monitor unloading the weights mid-request, and reloads the model if it
+    was released between the caller's readiness check and this call.
+    """
+    with model_in_use():
+        if not MODEL_LOADED or chatterbox_model is None:
+            logger.info(
+                "Model was not resident at synthesis time — loading it now."
+            )
+            if not ensure_model_loaded():
+                logger.error("Cannot synthesize: on-demand model load failed.")
+                return None, None
+        return _synthesize_impl(*args, **kwargs)
+
+
+def _synthesize_impl(
     text: str,
     audio_prompt_path: Optional[str] = None,
     temperature: float = 0.8,
@@ -525,9 +690,24 @@ def unload_model() -> bool:
     Unloads the current model and releases all GPU memory.
     Does NOT reload the model - use reload_model() for that.
 
+    Refuses while a synthesis is in flight, so neither the idle monitor nor a
+    manual /api/unload can pull the weights out from under an active request.
+
     Returns:
         bool: True if the model was unloaded successfully, False otherwise.
     """
+    with _lifecycle_lock:
+        if _active_requests > 0:
+            logger.warning(
+                f"Unload requested while {_active_requests} synthesis request(s) are in "
+                "flight. Skipping unload."
+            )
+            return False
+        return _unload_model_unlocked()
+
+
+def _unload_model_unlocked() -> bool:
+    """Unload implementation. Callers must hold `_lifecycle_lock`."""
     global chatterbox_model, MODEL_LOADED, model_device, loaded_model_type, loaded_model_class_name
 
     logger.info("Initiating model unload sequence...")
@@ -573,9 +753,28 @@ def reload_model() -> bool:
     based on the current configuration. Used for hot-swapping models
     without restarting the server process.
 
+    Also the path behind "Reload Model" in the UI: it rebuilds whatever the
+    config currently names, so re-applying the model you are already on is a
+    single action rather than a switch away and back.
+
     Returns:
         bool: True if the new model loaded successfully, False otherwise.
     """
+    with _lifecycle_lock:
+        if _active_requests > 0:
+            logger.warning(
+                f"Reload requested while {_active_requests} synthesis request(s) are in "
+                "flight. Skipping reload."
+            )
+            return False
+        result = _reload_model_unlocked()
+        if result:
+            _refresh_last_used()
+        return result
+
+
+def _reload_model_unlocked() -> bool:
+    """Reload implementation. Callers must hold `_lifecycle_lock`."""
     global chatterbox_model, MODEL_LOADED, model_device, loaded_model_type, loaded_model_class_name, _conds_cache
 
     logger.info("Initiating model hot-swap/reload sequence...")

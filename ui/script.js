@@ -333,17 +333,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
 
         // Update model status indicator
-        if (modelStatusIndicator && modelStatusText) {
-            if (modelInfo.loaded) {
-                modelStatusIndicator.className = 'status-dot success';
-                modelStatusText.textContent = `${modelInfo.class_name} loaded on ${modelInfo.device}`;
-                modelStatusText.className = 'model-status__text success';
-            } else {
-                modelStatusIndicator.className = 'status-dot error';
-                modelStatusText.textContent = 'Model not loaded';
-                modelStatusText.className = 'model-status__text error';
-            }
-        }
+        updateModelStatusLine(modelInfo);
 
         // Update model selector dropdown to match loaded model
         if (modelSelect && !modelChangesPending) {
@@ -378,6 +368,13 @@ document.addEventListener('DOMContentLoaded', async function () {
             exaggerationGroup?.classList.remove('hidden');
             cfgWeightGroup?.classList.remove('hidden');
         }
+
+        // The apply/reload control is always available: with nothing resident it
+        // loads, and with a model resident it restarts it in place.
+        if (applyModelBtn) {
+            applyModelBtn.classList.remove('hidden');
+        }
+        updateApplyModelBtnLabel();
 
         // Refresh presets to filter based on current model type
         populatePresets();
@@ -488,14 +485,97 @@ document.addEventListener('DOMContentLoaded', async function () {
         } else {
             modelChangesPending = false;
 
-            // Hide the apply button
+            // Keep the button available even when the selection is unchanged, so
+            // the current model can be reloaded in one step. Hiding it here used
+            // to force a switch to another model and back to restart the one you
+            // were already on.
             if (applyModelBtn) {
-                applyModelBtn.classList.add('hidden');
+                applyModelBtn.classList.remove('hidden');
             }
 
             // Restore status from current model info
             updateModelUI(currentModelInfo);
         }
+
+        updateApplyModelBtnLabel();
+    }
+
+    // Status line only — safe to call on a timer, unlike updateModelUI which
+    // re-renders presets and model-specific controls.
+    function updateModelStatusLine(modelInfo) {
+        if (!modelStatusIndicator || !modelStatusText || !modelInfo) return;
+
+        // A pending model change owns this line until it is applied.
+        if (modelChangesPending) return;
+
+        if (modelInfo.loaded) {
+            let statusText = `${modelInfo.class_name} loaded on ${modelInfo.device}`;
+            const countdown = modelInfo.idle?.seconds_until_unload;
+            if (typeof countdown === 'number') {
+                statusText += ` · unloads in ${formatIdleCountdown(countdown)}`;
+            }
+            modelStatusIndicator.className = 'status-dot success';
+            modelStatusText.textContent = statusText;
+            modelStatusText.className = 'model-status__text success';
+        } else {
+            // Nothing resident is the normal resting state now, not an error —
+            // generating loads the model automatically.
+            modelStatusIndicator.className = 'status-dot warning';
+            modelStatusText.textContent = 'Not loaded — will load on next generation';
+            modelStatusText.className = 'model-status__text warning';
+        }
+    }
+
+    // Keeps the status line and countdown honest while the model idles out from
+    // under an open page.
+    async function refreshModelStatus() {
+        if (document.hidden) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/model-info`);
+            if (!response.ok) return;
+            const info = await response.json();
+            if (!info) return;
+
+            const wasLoaded = currentModelInfo?.loaded;
+            currentModelInfo = info;
+            updateModelStatusLine(info);
+
+            // Residency flipped, so the button's job changed with it.
+            if (wasLoaded !== info.loaded) {
+                updateApplyModelBtnLabel();
+            }
+        } catch (error) {
+            // Server may be mid-restart during a model swap; retry on the next tick.
+        }
+    }
+
+    function formatIdleCountdown(seconds) {
+        const total = Math.max(0, Math.round(seconds));
+        const mins = Math.floor(total / 60);
+        const secs = total % 60;
+        if (mins && secs) return `${mins}m ${secs}s`;
+        return mins ? `${mins}m` : `${secs}s`;
+    }
+
+    // The button does double duty: apply a pending change, or reload the model
+    // that is already selected. Label it for whichever case applies.
+    function updateApplyModelBtnLabel() {
+        if (!applyModelBtn || applyModelBtn.disabled) return;
+
+        const icon = `
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+        `;
+        const label = modelChangesPending
+            ? 'Apply &amp; Restart'
+            : (currentModelInfo?.loaded ? 'Reload Model' : 'Load Model');
+        applyModelBtn.innerHTML = `${icon}${label}`;
+        applyModelBtn.title = modelChangesPending
+            ? 'Switch to the selected model'
+            : (currentModelInfo?.loaded
+                ? 'Restart the model that is already loaded'
+                : 'Load the selected model now instead of waiting for the first request');
     }
 
 
@@ -566,15 +646,10 @@ document.addEventListener('DOMContentLoaded', async function () {
             console.error('Error applying model change:', error);
             showNotification(`Error: ${error.message}`, 'error');
 
-            // Re-enable button
+            // Re-enable button, relabelled for whichever job it now has
             if (applyModelBtn) {
                 applyModelBtn.disabled = false;
-                applyModelBtn.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                    </svg>
-                    Apply & Restart
-                `;
+                updateApplyModelBtnLabel();
             }
         }
     }
@@ -757,6 +832,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (applyModelBtn) {
             applyModelBtn.addEventListener('click', applyModelChange);
         }
+
+        // Poll residency so an idle unload is reflected without a page refresh.
+        setInterval(refreshModelStatus, 15000);
 
         // NEW: Tag button listeners
         tagButtons.forEach(button => {

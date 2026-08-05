@@ -8,6 +8,11 @@ server:
   log_file_path: logs/tts_server.log
   log_file_max_size_mb: 10
   log_file_backup_count: 5
+  # Load the model on the first request rather than at startup.
+  lazy_load_model: true
+  # Unload the model after this many idle minutes, freeing its VRAM. The next
+  # request reloads it automatically. Set to 0 to keep the model resident.
+  model_idle_timeout_minutes: 20
 model:
   repo_id: chatterbox-turbo
 tts_engine:

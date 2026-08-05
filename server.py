@@ -153,12 +153,32 @@ async def lifespan(app: FastAPI):
         for p in paths_to_ensure:
             p.mkdir(parents=True, exist_ok=True)
 
-        if not engine.load_model():
+        lazy_load = config_manager.get_bool("server.lazy_load_model", True)
+        idle_timeout_minutes = config_manager.get_float(
+            "server.model_idle_timeout_minutes", 20.0
+        )
+
+        model_ready = True
+        if lazy_load:
+            logger.info(
+                "Lazy loading enabled: the model will load on the first TTS request, "
+                "leaving VRAM free until then."
+            )
+        elif not engine.load_model():
+            model_ready = False
             logger.critical(
                 "CRITICAL: TTS Model failed to load on startup. Server might not function correctly."
             )
         else:
             logger.info("TTS Model loaded successfully via engine.")
+
+        # The idle monitor runs regardless of how the model got loaded — it only
+        # acts once something is resident and has gone unused.
+        engine.start_idle_monitor(idle_timeout_minutes)
+
+        # Open the browser whenever the server itself came up. Previously this was
+        # gated on a successful eager load, which never happens in lazy mode.
+        if model_ready:
             host_address = get_host()
             server_port = get_port()
             browser_thread = threading.Thread(
@@ -617,6 +637,15 @@ async def unload_model_endpoint():
     logger.info("Request received for /api/unload (Model Unload).")
 
     try:
+        active = engine.get_idle_status().get("active_requests", 0)
+        if active > 0:
+            # Not a failure — the model is busy. Distinguish it so callers can retry.
+            message = (
+                f"{active} synthesis request(s) in flight; model left loaded. Retry once idle."
+            )
+            logger.info(f"Unload skipped: {message}")
+            raise HTTPException(status_code=409, detail=message)
+
         success = engine.unload_model()
 
         if success:
@@ -879,12 +908,19 @@ async def custom_tts_endpoint(
     )
     perf_monitor.record("TTS request received")
 
+    # Load on demand rather than rejecting the request. Covers both a lazy start
+    # and a model that was released after sitting idle.
     if not engine.MODEL_LOADED:
-        logger.error("TTS request failed: Model not loaded.")
+        logger.info("TTS request arrived with no model resident — loading it now.")
+    if not await asyncio.get_running_loop().run_in_executor(
+        None, engine.ensure_model_loaded
+    ):
+        logger.error("TTS request failed: model could not be loaded.")
         raise HTTPException(
             status_code=503,
-            detail="TTS engine model is not currently loaded or available.",
+            detail="TTS engine model could not be loaded. Check server logs for details.",
         )
+    perf_monitor.record("Model ready")
 
     logger.info(
         f"Received /tts request: mode='{request.voice_mode}', format='{request.output_format}'"
@@ -1411,11 +1447,15 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
             status_code=404, detail=f"Voice file '{request.voice}' not found."
         )
 
-    # Check if the TTS model is loaded
+    # Load on demand rather than rejecting the request (lazy start or idle unload).
     if not engine.MODEL_LOADED:
+        logger.info("Speech request arrived with no model resident — loading it now.")
+    if not await asyncio.get_running_loop().run_in_executor(
+        None, engine.ensure_model_loaded
+    ):
         raise HTTPException(
             status_code=503,
-            detail="TTS engine model is not currently loaded or available.",
+            detail="TTS engine model could not be loaded. Check server logs for details.",
         )
 
     try:
