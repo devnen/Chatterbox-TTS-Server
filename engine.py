@@ -487,7 +487,16 @@ def synthesize(
         # Call the core model's generate method.
         # autocast promotes float32 inputs to bfloat16 to match T3/S3Gen weights,
         # keeping numerically sensitive ops (softmax, norms) in float32 automatically.
-        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16_ENABLED):
+        # inference_mode matters here beyond the usual speed/memory win: the
+        # watermarking step inside generate() (perth's apply_watermark(), called
+        # internally by ChatterboxTTS.generate()/ChatterboxTurboTTS.generate())
+        # runs its own conv-based encoder forward pass with no grad-mode guard of
+        # its own. Without an outer no_grad()/inference_mode() context, autograd
+        # builds and retains a full backward graph for that forward pass on every
+        # single call, none of which is ever backpropped through -- a real,
+        # measured host-RAM leak under sustained load. See the PR description for
+        # profiling details.
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16_ENABLED):
             if loaded_model_type == "multilingual":
                 wav_tensor = chatterbox_model.generate(
                     text=text,
