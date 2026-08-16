@@ -487,7 +487,7 @@ def synthesize(
         # Call the core model's generate method.
         # autocast promotes float32 inputs to bfloat16 to match T3/S3Gen weights,
         # keeping numerically sensitive ops (softmax, norms) in float32 automatically.
-        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16_ENABLED):
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16, enabled=BF16_ENABLED):
             if loaded_model_type == "multilingual":
                 wav_tensor = chatterbox_model.generate(
                     text=text,
