@@ -4,7 +4,7 @@
 chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master
 
 # Core Web Framework
-fastapi
+fastapi>=0.100.0,<=0.139.0
 uvicorn[standard]
 
 # Machine Learning & Audio

@@ -35,7 +35,7 @@ resampy==0.4.3
 resemble-perth==1.0.1
 
 # Core Web Framework
-fastapi>=0.100.0,<0.116.0      # starlette<1.0 needed for TemplateResponse compat
+fastapi>=0.100.0,<=0.139.0
 uvicorn[standard]>=0.27.0
 
 # ML & Audio Libraries
