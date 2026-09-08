@@ -787,7 +787,7 @@ The server relies exclusively on `config.yaml` for runtime configuration.
 
 *   `server`: `host`, `port`, logging settings.
 *   `model`: `repo_id` (e.g., "ResembleAI/chatterbox").
-*   `tts_engine`: `device` ('auto', 'cuda', 'mps', 'cpu'), `predefined_voices_path`, `reference_audio_path`, `default_voice_id`.
+*   `tts_engine`: `device` ('auto', 'cuda', 'mps', 'cpu'), `predefined_voices_path`, `reference_audio_path`, `default_voice_id`, `voice_cache_size` (LRU size for cached voice conditionals, default 8).
 *   `paths`: `model_cache` (for `download_model.py`), `output`.
 *   `generation_defaults`: Default UI values for `temperature`, `exaggeration`, `cfg_weight`, `seed`, `speed_factor`, `language`.
 *   `audio_output`: `format`, `sample_rate`, `max_reference_duration_sec`.

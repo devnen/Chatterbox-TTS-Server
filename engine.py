@@ -1,12 +1,14 @@
 # File: engine.py
 # Core TTS model loading and speech generation logic.
 
+import copy
 import gc
 import logging
 import os
 import random
 import numpy as np
 import torch
+from collections import OrderedDict
 from typing import Optional, Tuple
 from pathlib import Path
 
@@ -114,7 +116,14 @@ loaded_model_class_name: Optional[str] = None  # "ChatterboxTTS" or "ChatterboxT
 
 # Voice conditioning cache: avoids re-encoding the same voice file on every request.
 # Key: (resolved_path, file_mtime, exaggeration) — mtime invalidates if file changes.
-_conds_cache: dict = {}
+#
+# The cache is a bounded LRU and entries are stored on the CPU. An unbounded
+# GPU-resident cache leaked roughly 200-300 MiB of VRAM per distinct voice
+# (allocator blocks pinned by the cached tensors), which exhausted a 12 GiB GPU
+# after a few dozen voices. Size is controlled by `tts_engine.voice_cache_size`
+# (0 disables caching).
+_conds_cache: "OrderedDict[tuple, object]" = OrderedDict()
+_VOICE_CACHE_SIZE_DEFAULT = 8
 
 
 def _conds_cache_key(path: str, exaggeration: float) -> tuple:
@@ -123,6 +132,40 @@ def _conds_cache_key(path: str, exaggeration: float) -> tuple:
     except OSError:
         mtime = 0.0
     return (path, mtime, exaggeration)
+
+
+def _voice_cache_size() -> int:
+    try:
+        return max(0, int(config_manager.get_int("tts_engine.voice_cache_size", _VOICE_CACHE_SIZE_DEFAULT)))
+    except Exception:
+        return _VOICE_CACHE_SIZE_DEFAULT
+
+
+def _conds_copy_to(conds, device):
+    """
+    Return a copy of a Conditionals object with its tensors on `device`.
+    Both Conditionals.to() and T3Cond.to() mutate in place, so shallow-copy the
+    containers first to keep the cached CPU copy untouched.
+    """
+    new = copy.copy(conds)
+    new.t3 = copy.copy(conds.t3)
+    new.gen = dict(conds.gen)
+    return new.to(device)
+
+
+def _release_cuda_memory():
+    """Return freed allocator blocks to the driver so VRAM does not creep upward."""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def clear_voice_cache() -> int:
+    """Drop all cached voice conditionals and release GPU memory. Returns entries removed."""
+    n = len(_conds_cache)
+    _conds_cache.clear()
+    _release_cuda_memory()
+    return n
 
 
 def set_seed(seed_value: int):
@@ -480,7 +523,10 @@ def synthesize(
             ex_for_key = 0.0 if loaded_model_type == "turbo" else exaggeration
             conds_key = _conds_cache_key(audio_prompt_path, ex_for_key)
             if conds_key in _conds_cache:
-                chatterbox_model.conds = _conds_cache[conds_key]
+                _conds_cache.move_to_end(conds_key)
+                chatterbox_model.conds = _conds_copy_to(
+                    _conds_cache[conds_key], chatterbox_model.device
+                )
                 effective_prompt = None  # conds already set, skip prepare_conditionals
                 logger.debug(f"Voice cache hit: {audio_prompt_path}")
 
@@ -506,11 +552,19 @@ def synthesize(
                     cfg_weight=cfg_weight,
                 )
 
-        # Store conds in cache after first compute for this voice.
+        # Store a CPU copy of the conds in the LRU cache after first compute for
+        # this voice, then hand the allocator blocks used while encoding the
+        # reference clip back to the driver.
         if conds_key is not None and effective_prompt is not None:
-            if chatterbox_model.conds is not None:
-                _conds_cache[conds_key] = chatterbox_model.conds
+            max_size = _voice_cache_size()
+            if max_size > 0 and chatterbox_model.conds is not None:
+                _conds_cache[conds_key] = _conds_copy_to(chatterbox_model.conds, "cpu")
+                _conds_cache.move_to_end(conds_key)
+                while len(_conds_cache) > max_size:
+                    evicted_key, _ = _conds_cache.popitem(last=False)
+                    logger.debug(f"Evicted voice conditionals for: {evicted_key[0]}")
                 logger.debug(f"Cached voice conditionals for: {audio_prompt_path}")
+            _release_cuda_memory()
 
         # The ChatterboxTTS.generate method already returns a CPU tensor.
         return wav_tensor, chatterbox_model.sr

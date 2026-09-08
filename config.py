@@ -63,6 +63,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             DEFAULT_REFERENCE_AUDIO_PATH
         ),  # Directory for reference audio files for cloning.
         "default_voice_id": "default_sample.wav",  # Default voice file to use if none is specified.
+        "voice_cache_size": 8,  # Max distinct voices whose conditionals are cached (LRU, CPU-resident). 0 disables.
     },
     "paths": {  # General configurable paths for the application.
         "model_cache": str(
