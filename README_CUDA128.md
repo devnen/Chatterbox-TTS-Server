@@ -118,7 +118,7 @@ pip install -r requirements-nvidia-cu128.txt
 
 # IMPORTANT: Install Chatterbox separately with --no-deps
 # This prevents PyTorch from being downgraded
-pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+pip install --no-deps git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2
 
 # Start the server
 python server.py
@@ -201,7 +201,7 @@ This error means PyTorch doesn't support your GPU's compute capability. This typ
    
    # Or manually
    pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu128
-   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master
+   pip install --no-deps git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2
    ```
 
 3. **Check supported architectures**:

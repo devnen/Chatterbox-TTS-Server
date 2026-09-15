@@ -31,7 +31,7 @@ COPY requirements-rdna4.txt ./requirements-rdna4.txt
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir -r requirements-rdna4-init.txt && \
     python3 -m pip install --no-cache-dir -r requirements-rdna4.txt && \
-    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0 && \
+    python3 -m pip install --no-cache-dir --no-deps git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2 s3tokenizer==0.3.0 onnx==1.16.0 && \
     python3 -m pip install --no-cache-dir "protobuf>=4.25.0"
 
 # Patches for torch 2.9+ compatibility (required when using ROCm 7.2 wheels):

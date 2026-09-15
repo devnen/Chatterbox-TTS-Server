@@ -109,7 +109,7 @@ INSTALL_NAMES = {
 }
 
 # Chatterbox fork URL (used for CUDA 12.8 installation)
-CHATTERBOX_REPO = "git+https://github.com/devnen/chatterbox-v2.git@master"
+CHATTERBOX_REPO = "git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2"
 
 # Timeout settings (seconds)
 # First run downloads large model files (~2GB). Subsequent starts are much faster.

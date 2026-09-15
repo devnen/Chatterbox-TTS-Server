@@ -79,7 +79,7 @@ echo "$(ts) Installing Chatterbox package (from GitHub, no-cache, upgrade)..."
 "$MICROMAMBA" run -n cb311 pip install \
   --no-cache-dir --upgrade \
   --progress-bar on \
-  "chatterbox-tts @ git+https://github.com/devnen/chatterbox-v2.git@master"
+  "chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2"
 
 echo "$(ts) ✅ Installation complete!"
 ```

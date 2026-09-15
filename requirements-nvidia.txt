@@ -20,7 +20,7 @@ torchaudio==2.5.1+cu121
 #
 # For manual installation, run these commands in order:
 #   pip install -r requirements-nvidia.txt
-#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+#   pip install --no-deps git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2 s3tokenizer==0.3.0 onnx==1.16.0
 
 # Chatterbox Dependencies (explicit, since --no-deps skips them)
 # NOTE: s3tokenizer and onnx are installed with --no-deps alongside chatterbox

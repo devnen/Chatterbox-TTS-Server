@@ -10,7 +10,7 @@
 # Manual install:
 #   pip install -r requirements-rdna4-init.txt
 #   pip install -r requirements-rdna4.txt
-#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+#   pip install --no-deps git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2 s3tokenizer==0.3.0 onnx==1.16.0
 
 https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.3/triton-3.5.1%2Brocm7.2.3.gita272dfa8-cp310-cp310-linux_x86_64.whl
 https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.3/torch-2.9.1%2Brocm7.2.3.lw.gitebc02d69-cp310-cp310-linux_x86_64.whl

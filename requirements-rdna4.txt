@@ -10,7 +10,7 @@
 # Manual installation order:
 #   pip install -r requirements-rdna4-init.txt
 #   pip install -r requirements-rdna4.txt
-#   pip install --no-deps git+https://github.com/devnen/chatterbox-v2.git@master s3tokenizer==0.3.0 onnx==1.16.0
+#   pip install --no-deps git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2 s3tokenizer==0.3.0 onnx==1.16.0
 #
 # The --no-deps flag on chatterbox-tts is critical: without it, pip will
 # replace the ROCm torch wheels with CPU-only versions from PyPI.
