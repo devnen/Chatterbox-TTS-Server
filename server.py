@@ -60,6 +60,8 @@ from config import (
     get_audio_sample_rate,
     get_full_config_for_template,
     get_audio_output_format,
+    get_openai_stream_chunk_size,
+    get_openai_stream_by_default,
 )
 
 import engine  # TTS Engine interface
@@ -77,10 +79,38 @@ class OpenAISpeechRequest(BaseModel):
     model: str
     input_: str = Field(..., alias="input")
     voice: str
-    response_format: Literal["wav", "opus", "mp3"] = "wav"  # Add "mp3"
+    response_format: Literal["wav", "opus", "mp3", "pcm"] = "wav"  # Add "mp3", "pcm"
     speed: float = 1.0
     seed: Optional[int] = None
     language: Optional[str] = None
+    stream: Optional[bool] = Field(
+        None,
+        description=(
+            "If true, returns a StreamingResponse and yields audio as each "
+            "sentence/clause chunk is synthesized instead of waiting for the "
+            "full input to finish. Supported for response_format='pcm' "
+            "(headerless raw PCM16, matching the OpenAI 'pcm' contract used by "
+            "clients such as pipecat's OpenAITTSService) and response_format="
+            "'wav' (a WAV header is sent once, followed by raw PCM16 frames, "
+            "mirroring the existing /tts stream=true behaviour). Streaming "
+            "with 'opus'/'mp3' is not supported; such requests fall back to "
+            "a non-streaming response. If omitted (the common case for "
+            "OpenAI-SDK clients, which never send this field), falls back to "
+            "server.openai_stream_by_default (false unless configured "
+            "otherwise); an explicit true/false here always overrides that "
+            "server default."
+        ),
+    )
+    chunk_size: Optional[int] = Field(
+        None,
+        ge=50,
+        le=500,
+        description=(
+            "Approximate target character length for sentence/clause chunks "
+            "when stream=true. Defaults to server.openai_stream_chunk_size "
+            "(50 chars) if not set. Ignored when stream=false."
+        ),
+    )
 
 
 # --- Logging Configuration ---
@@ -406,6 +436,92 @@ def _float32_to_pcm16(audio_np: np.ndarray) -> bytes:
     """Convert a float32 numpy array in [-1, 1] to int16 PCM bytes."""
     clipped = np.clip(audio_np, -1.0, 1.0)
     return (clipped * 32767).astype(np.int16).tobytes()
+
+
+_STREAM_CROSSFADE_MS = 20
+
+
+async def _stream_synthesized_audio(
+    text_chunks: List[str],
+    audio_prompt_path: Optional[str],
+    temperature: float,
+    exaggeration: float,
+    cfg_weight: float,
+    seeds: List[Optional[int]],
+    language: str,
+    speed_factor: float = 1.0,
+    include_wav_header: bool = True,
+):
+    """
+    Shared streaming generator used by both the custom /tts endpoint
+    (stream=true) and the OpenAI-compatible /v1/audio/speech endpoint
+    (stream=true). Synthesizes each text chunk sequentially and yields
+    16-bit PCM audio bytes, crossfading chunk boundaries to avoid clicks at
+    the seams (the same approach /tts already used, before it was extracted
+    here for reuse).
+
+    seeds must be the same length as text_chunks; each caller resolves its
+    own per-chunk seed convention before calling this (e.g. /tts reuses one
+    seed for every chunk; /v1/audio/speech increments the seed per chunk to
+    match its existing non-streaming behaviour).
+
+    If include_wav_header is True, a WAV header with an unknown ("streaming")
+    data size is yielded first, then raw PCM16 frames — this is what /tts's
+    stream=true already returns. If False, only headerless raw PCM16 bytes
+    are yielded, matching the OpenAI response_format="pcm" contract (16-bit
+    signed little-endian mono, no container), used by clients such as
+    pipecat's OpenAITTSService.
+    """
+    loop = asyncio.get_running_loop()
+    carry: Optional[np.ndarray] = None
+    header_sent = not include_wav_header
+
+    for i, chunk_text in enumerate(text_chunks):
+        is_last = i == len(text_chunks) - 1
+        chunk_seed = seeds[i] if i < len(seeds) else None
+        logger.info(f"Streaming chunk {i+1}/{len(text_chunks)}...")
+
+        audio_tensor, chunk_sr = await loop.run_in_executor(
+            None,
+            lambda c=chunk_text, s=chunk_seed: engine.synthesize(
+                text=c,
+                audio_prompt_path=audio_prompt_path,
+                temperature=temperature,
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+                seed=s,
+                language=language,
+            ),
+        )
+
+        if audio_tensor is None or chunk_sr is None:
+            logger.error(f"Streaming TTS: engine returned None for chunk {i+1}; stopping stream.")
+            return
+
+        if speed_factor != 1.0:
+            audio_tensor, _ = utils.apply_speed_factor(audio_tensor, chunk_sr, speed_factor)
+
+        audio_np = audio_tensor.cpu().numpy().squeeze().astype(np.float32)
+
+        if not header_sent:
+            yield _create_wav_header(chunk_sr)
+            header_sent = True
+
+        fade_samples = int(_STREAM_CROSSFADE_MS / 1000 * chunk_sr)
+
+        if carry is not None:
+            # Crossfade the held-back tail of the previous chunk with the head of this one
+            audio_np = _crossfade_with_overlap(carry, audio_np, fade_samples)
+            carry = None
+
+        if not is_last and len(audio_np) > fade_samples:
+            carry = audio_np[-fade_samples:].copy()
+            yield _float32_to_pcm16(audio_np[:-fade_samples])
+        else:
+            yield _float32_to_pcm16(audio_np)
+
+    if carry is not None:
+        yield _float32_to_pcm16(carry)
 
 
 # --- End Audio Stitching Helper Functions ---
@@ -1004,65 +1120,20 @@ async def custom_tts_endpoint(
             request.language if request.language is not None else get_gen_default_language()
         )
 
-        CROSSFADE_MS_STREAM = 20
-
-        async def _stream_generator():
-            loop = asyncio.get_running_loop()
-            carry: Optional[np.ndarray] = None
-            header_sent = False
-
-            for i, chunk_text in enumerate(text_chunks):
-                is_last = i == len(text_chunks) - 1
-                logger.info(f"Streaming chunk {i+1}/{len(text_chunks)}...")
-
-                audio_tensor, chunk_sr = await loop.run_in_executor(
-                    None,
-                    lambda c=chunk_text: engine.synthesize(
-                        text=c,
-                        audio_prompt_path=audio_prompt_str,
-                        temperature=temperature_val,
-                        exaggeration=exaggeration_val,
-                        cfg_weight=cfg_weight_val,
-                        seed=seed_val,
-                        language=language_val,
-                    ),
-                )
-
-                if audio_tensor is None or chunk_sr is None:
-                    logger.error(f"Streaming TTS: engine returned None for chunk {i+1}; stopping stream.")
-                    return
-
-                if speed_factor_stream != 1.0:
-                    audio_tensor, _ = utils.apply_speed_factor(
-                        audio_tensor, chunk_sr, speed_factor_stream
-                    )
-
-                audio_np = audio_tensor.cpu().numpy().squeeze().astype(np.float32)
-
-                if not header_sent:
-                    yield _create_wav_header(chunk_sr)
-                    header_sent = True
-
-                fade_samples = int(CROSSFADE_MS_STREAM / 1000 * chunk_sr)
-
-                if carry is not None:
-                    # Crossfade the held-back tail of the previous chunk with the head of this one
-                    audio_np = _crossfade_with_overlap(carry, audio_np, fade_samples)
-                    carry = None
-
-                if not is_last and len(audio_np) > fade_samples:
-                    carry = audio_np[-fade_samples:].copy()
-                    yield _float32_to_pcm16(audio_np[:-fade_samples])
-                else:
-                    yield _float32_to_pcm16(audio_np)
-
-            if carry is not None:
-                yield _float32_to_pcm16(carry)
-
         timestamp_str = time.strftime("%Y%m%d_%H%M%S")
         stream_filename = utils.sanitize_filename(f"tts_stream_{timestamp_str}.wav")
         return StreamingResponse(
-            _stream_generator(),
+            _stream_synthesized_audio(
+                text_chunks=text_chunks,
+                audio_prompt_path=audio_prompt_str,
+                temperature=temperature_val,
+                exaggeration=exaggeration_val,
+                cfg_weight=cfg_weight_val,
+                seeds=[seed_val] * len(text_chunks),
+                language=language_val,
+                speed_factor=speed_factor_stream,
+                include_wav_header=True,
+            ),
             media_type="audio/wav",
             headers={"Content-Disposition": f'attachment; filename="{stream_filename}"'},
         )
@@ -1422,6 +1493,60 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
         seed_to_use = (
             request.seed if request.seed is not None else get_gen_default_seed()
         )
+
+        # --- Streaming fork (pcm/wav only; opus/mp3 fall back to non-streaming) ---
+        # request.stream is Optional: most OpenAI-SDK clients (e.g. pipecat's
+        # OpenAITTSService) never send it at all, so an unset value falls back
+        # to the server-wide default instead of always meaning "false".
+        stream_requested = (
+            request.stream if request.stream is not None else get_openai_stream_by_default()
+        )
+        if stream_requested and request.response_format in ("pcm", "wav"):
+            stream_chunk_size = (
+                request.chunk_size
+                if request.chunk_size is not None
+                else get_openai_stream_chunk_size()
+            )
+            text_chunks = utils.chunk_text_by_sentences_or_clauses(
+                request.input_, stream_chunk_size
+            )
+            if not text_chunks:
+                raise HTTPException(
+                    status_code=400, detail="Text processing resulted in no usable chunks."
+                )
+
+            logger.info(
+                f"OpenAI speech (stream): processing {len(text_chunks)} chunk(s) for "
+                f"input of {len(request.input_)} chars, chunk_size={stream_chunk_size}, "
+                f"response_format={request.response_format}"
+            )
+
+            seeds = [
+                seed_to_use + i if seed_to_use is not None and seed_to_use >= 0 else seed_to_use
+                for i in range(len(text_chunks))
+            ]
+
+            media_type = "audio/pcm" if request.response_format == "pcm" else "audio/wav"
+            return StreamingResponse(
+                _stream_synthesized_audio(
+                    text_chunks=text_chunks,
+                    audio_prompt_path=str(audio_prompt_path),
+                    temperature=get_gen_default_temperature(),
+                    exaggeration=get_gen_default_exaggeration(),
+                    cfg_weight=get_gen_default_cfg_weight(),
+                    seeds=seeds,
+                    language=request.language or get_gen_default_language(),
+                    speed_factor=request.speed,
+                    include_wav_header=(request.response_format == "wav"),
+                ),
+                media_type=media_type,
+            )
+        if stream_requested:
+            logger.warning(
+                f"stream=true is not supported for response_format="
+                f"'{request.response_format}'; falling back to a non-streaming response."
+            )
+        # --- End streaming fork ---
 
         # Split long text into chunks for better quality (same as /tts endpoint)
         DEFAULT_CHUNK_SIZE = 120
