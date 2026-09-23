@@ -110,6 +110,7 @@ logger = logging.getLogger(__name__)
 
 # --- Global Variables & Application Setup ---
 startup_complete_event = threading.Event()  # For coordinating browser opening
+request_lock = threading.Lock()
 
 
 def _delayed_browser_open(host: str, port: int):
@@ -1392,7 +1393,7 @@ async def openai_voices_endpoint(model: str = ""):
         )
 
 @app.post("/v1/audio/speech", tags=["OpenAI Compatible"])
-async def openai_speech_endpoint(request: OpenAISpeechRequest):
+def openai_speech_endpoint(request: OpenAISpeechRequest):
     # Determine the audio prompt path based on the voice parameter
     predefined_voices_path = get_predefined_voices_path(ensure_absolute=True)
     reference_audio_path = get_reference_audio_path(ensure_absolute=True)
@@ -1438,33 +1439,34 @@ async def openai_speech_endpoint(request: OpenAISpeechRequest):
         all_audio_segments_np: List[np.ndarray] = []
         engine_sr: Optional[int] = None
 
-        for i, chunk_text in enumerate(text_chunks):
-            chunk_seed = seed_to_use + i if seed_to_use is not None and seed_to_use >= 0 else seed_to_use
+        with request_lock:
+            for i, chunk_text in enumerate(text_chunks):
+                chunk_seed = seed_to_use + i if seed_to_use is not None and seed_to_use >= 0 else seed_to_use
 
-            audio_tensor, sr = engine.synthesize(
-                text=chunk_text,
-                audio_prompt_path=str(audio_prompt_path),
-                temperature=get_gen_default_temperature(),
-                exaggeration=get_gen_default_exaggeration(),
-                cfg_weight=get_gen_default_cfg_weight(),
-                seed=chunk_seed,
-                language=request.language or get_gen_default_language(),
-            )
-
-            if audio_tensor is None or sr is None:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"TTS engine failed to synthesize audio for chunk {i+1}.",
+                audio_tensor, sr = engine.synthesize(
+                    text=chunk_text,
+                    audio_prompt_path=str(audio_prompt_path),
+                    temperature=get_gen_default_temperature(),
+                    exaggeration=get_gen_default_exaggeration(),
+                    cfg_weight=get_gen_default_cfg_weight(),
+                    seed=chunk_seed,
+                    language=request.language or get_gen_default_language(),
                 )
 
-            if engine_sr is None:
-                engine_sr = sr
+                if audio_tensor is None or sr is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"TTS engine failed to synthesize audio for chunk {i+1}.",
+                    )
 
-            if request.speed != 1.0:
-                audio_tensor, _ = utils.apply_speed_factor(audio_tensor, sr, request.speed)
+                if engine_sr is None:
+                    engine_sr = sr
 
-            chunk_np = audio_tensor.cpu().numpy().squeeze().astype(np.float32)
-            all_audio_segments_np.append(chunk_np)
+                if request.speed != 1.0:
+                    audio_tensor, _ = utils.apply_speed_factor(audio_tensor, sr, request.speed)
+
+                chunk_np = audio_tensor.cpu().numpy().squeeze().astype(np.float32)
+                all_audio_segments_np.append(chunk_np)
 
         # Stitch chunks together with crossfading
         if len(all_audio_segments_np) == 1:
