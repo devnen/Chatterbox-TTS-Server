@@ -1103,7 +1103,7 @@ The primary endpoint for TTS generation is `/tts`. The OpenAI-compatible `/v1/au
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/tts` | POST | Custom TTS, full param set, supports `stream: true` (mp3 / wav / opus) |
-| `/v1/audio/speech` | POST | OpenAI-compatible TTS |
+| `/v1/audio/speech` | POST | OpenAI-compatible TTS, supports `stream: true` (`pcm` / `wav`) |
 | `/v1/audio/voices` | GET | OpenAI-compatible voice listing |
 | `/api/ui/initial-data` | GET | UI bootstrap + comprehensive health check |
 | `/api/model-info` | GET | Loaded model status, type, supported languages |
@@ -1137,6 +1137,59 @@ curl -X POST http://localhost:8004/tts \
   -H "Content-Type: application/json" \
   -d '{"text":"The first chunk arrives quickly, the rest stream behind.","stream":true}' \
   --output stream.wav
+```
+
+**`/v1/audio/speech` request body (`OpenAISpeechRequest`):**
+
+- `model` (string, required) — accepted for OpenAI compatibility; not used to select a model.
+- `input` (string, required) — text to synthesize.
+- `voice` (string, required) — predefined voice filename or reference-audio filename.
+- `response_format` ("wav" | "opus" | "mp3" | "pcm", default "wav").
+- `speed` (float, default `1.0`).
+- `seed`, `language` — generation parameter overrides.
+- `stream` (boolean, optional, default unset) — if true, returns a `StreamingResponse` and
+  yields audio as each sentence/clause chunk is synthesized, instead of waiting for the full
+  input. Supported for `response_format="pcm"` (headerless raw 16-bit PCM, little-endian mono
+  at the engine's sample rate — the format OpenAI's own `pcm` response uses, and what clients
+  such as pipecat's `OpenAITTSService` expect from `with_streaming_response(...).iter_bytes()`)
+  and `response_format="wav"` (a WAV header is sent once, followed by raw PCM16 frames,
+  mirroring `/tts`'s existing `stream=true` behavior). `stream=true` with `opus`/`mp3` is not
+  supported; the request falls back to a non-streaming response and logs a warning. If the
+  request omits `stream` entirely — the common case for OpenAI-SDK clients, which call
+  `with_streaming_response.create(...)` without ever setting this field — the server falls
+  back to the `server.openai_stream_by_default` config value (`false` unless the operator
+  opts in). An explicit `true`/`false` in the request always overrides that server default.
+- `chunk_size` (integer 50–500, optional) — target character length per sentence/clause chunk
+  when `stream=true`. Defaults to `server.openai_stream_chunk_size` in `config.yaml` (`50`).
+  Chunking is sentence-aware first, then falls back to clause boundaries (`,`, `;`, `:`) for a
+  single sentence that alone exceeds `chunk_size`, so short one-sentence turns (60-90 chars,
+  common in voice-agent prompts) still get split and start streaming before the full sentence
+  finishes synthesizing. Ignored when streaming is off, where behavior is unchanged from
+  before (whole input synthesized, then encoded to the requested container format).
+
+**Streaming by default for clients that never send `stream` (config option):**
+
+Most OpenAI-SDK-based clients — including pipecat's `OpenAITTSService`, which only sends
+`model`, `voice`, `input`, and `response_format` — never send the `stream` field at all. To
+turn streaming on for such clients without changing their code, set in `config.yaml`:
+
+```yaml
+server:
+  openai_stream_by_default: true
+```
+
+With that set, `POST /v1/audio/speech` streams (for `response_format="pcm"`/`"wav"`) even when
+the request body omits `stream`. A request that explicitly sets `"stream": false` still gets a
+non-streaming response; `"stream": true` still streams regardless of this setting. Default is
+`false`, so existing deployments that don't add this key see no behavior change.
+
+**Example — streaming OpenAI-compatible TTS (raw PCM, e.g. for a realtime voice agent):**
+
+```bash
+curl -X POST http://localhost:8004/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"tts-1","input":"The first chunk arrives quickly.","voice":"Emily.wav","response_format":"pcm","stream":true}' \
+  --output stream.pcm
 ```
 # 🐳 Docker Installation
 

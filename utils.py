@@ -349,6 +349,16 @@ def encode_audio(
             )
             audio_segment.export(output_buffer, format="mp3")
 
+        elif output_format == "pcm":
+            # Raw headerless 16-bit signed little-endian mono PCM, matching
+            # the OpenAI /v1/audio/speech response_format="pcm" contract
+            # (used by clients such as pipecat's OpenAITTSService). No
+            # soundfile/pydub container is written; rate_to_write already
+            # reflects target_sample_rate from the resampling step above.
+            audio_clipped = np.clip(audio_array, -1.0, 1.0)
+            audio_int16 = (audio_clipped * 32767).astype(np.int16)
+            output_buffer.write(audio_int16.tobytes())
+
         else:
             logger.error(
                 f"Unsupported output format requested for encoding: {output_format}"
@@ -1021,6 +1031,84 @@ def _preprocess_and_segment_text(full_text: str) -> List[Tuple[Optional[str], st
         f"Preprocessed text into {len(segmented_with_tags)} segments/sentences."
     )
     return segmented_with_tags
+
+
+_CLAUSE_BOUNDARY_PATTERN = re.compile(r"(?<=[,;:])\s+")
+
+
+def _split_segment_into_clauses(segment_text: str, chunk_size: int) -> List[str]:
+    """
+    Fallback splitter for a single sentence/segment that alone exceeds
+    chunk_size: breaks it at clause boundaries (comma, semicolon, colon) so a
+    long single sentence can still start streaming before the whole sentence
+    is synthesized. Never splits mid-word. Returns [segment_text] unchanged
+    if it already fits or has no clause boundary to split on.
+    """
+    if len(segment_text) <= chunk_size:
+        return [segment_text]
+
+    parts = [p for p in _CLAUSE_BOUNDARY_PATTERN.split(segment_text) if p]
+    if len(parts) <= 1:
+        return [segment_text]
+
+    clauses: List[str] = []
+    current = ""
+    for part in parts:
+        candidate = f"{current} {part}".strip() if current else part
+        if current and len(candidate) > chunk_size:
+            clauses.append(current)
+            current = part
+        else:
+            current = candidate
+    if current:
+        clauses.append(current)
+    return clauses
+
+
+def chunk_text_by_sentences_or_clauses(full_text: str, chunk_size: int) -> List[str]:
+    """
+    Like chunk_text_by_sentences, but additionally splits at clause
+    boundaries (comma/semicolon/colon) when a single sentence alone exceeds
+    chunk_size. Used by the streaming OpenAI-compatible endpoint
+    (/v1/audio/speech, stream=true) so short turns made of one 60-90 char
+    sentence (no internal '.'/'?'/'!') can still start streaming before the
+    whole sentence finishes synthesizing. chunk_text_by_sentences itself
+    (used by the non-streaming /tts and /v1/audio/speech paths) is left
+    untouched, so their behaviour does not change for callers who do not
+    request streaming.
+    """
+    if not full_text or full_text.isspace():
+        return []
+    if chunk_size <= 0:
+        chunk_size = float("inf")
+
+    processed_segments = _preprocess_and_segment_text(full_text)
+    if not processed_segments:
+        return []
+
+    expanded_segments: List[str] = []
+    for _, segment_text in processed_segments:
+        expanded_segments.extend(_split_segment_into_clauses(segment_text, chunk_size))
+
+    text_chunks: List[str] = []
+    current_chunk_parts: List[str] = []
+    current_chunk_length = 0
+    for part in expanded_segments:
+        part_len = len(part)
+        if not current_chunk_parts:
+            current_chunk_parts = [part]
+            current_chunk_length = part_len
+        elif current_chunk_length + 1 + part_len <= chunk_size:
+            current_chunk_parts.append(part)
+            current_chunk_length += 1 + part_len
+        else:
+            text_chunks.append(" ".join(current_chunk_parts))
+            current_chunk_parts = [part]
+            current_chunk_length = part_len
+    if current_chunk_parts:
+        text_chunks.append(" ".join(current_chunk_parts))
+
+    return text_chunks
 
 
 def chunk_text_by_sentences(

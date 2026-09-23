@@ -49,6 +49,18 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "log_file_backup_count": 5,  # Number of backup log files to keep.
         "ssl_certfile": None,  # Path to SSL certificate file for HTTPS. None = HTTP only.
         "ssl_keyfile": None,  # Path to SSL private key file for HTTPS. None = HTTP only.
+        "openai_stream_chunk_size": 50,  # Default char length for sentence/clause chunks
+        # when streaming from /v1/audio/speech (stream=true). Small default so short,
+        # single-sentence turns (e.g. 60-90 chars, no internal '.'/'?'/'!') still get
+        # split at clause boundaries (',', ';', ':') and start streaming quickly.
+        # Overridable per-request via OpenAISpeechRequest.chunk_size.
+        "openai_stream_by_default": False,  # If true, /v1/audio/speech streams
+        # (pcm/wav) even when the request omits the "stream" field entirely.
+        # Needed because most OpenAI-SDK-based clients (e.g. pipecat's
+        # OpenAITTSService) never send "stream" — they just call
+        # with_streaming_response.create(...) and read iter_bytes(). Per-request
+        # "stream": true/false always overrides this. Default false keeps
+        # existing deployments' behavior unchanged unless they opt in.
     },
     "model": {  # Added section for model source configuration
         "repo_id": "chatterbox-turbo",  # UPDATED: Default to Turbo model
@@ -880,6 +892,28 @@ def get_gen_default_language() -> str:
     return config_manager.get_string(
         "generation_defaults.language",
         _get_default_from_structure("generation_defaults.language"),
+    )
+
+
+def get_openai_stream_chunk_size() -> int:
+    """Returns the default chunk size (characters) used to split text into
+    sentence/clause chunks for the streaming OpenAI-compatible endpoint
+    (POST /v1/audio/speech with stream=true). Can be overridden per-request
+    via OpenAISpeechRequest.chunk_size."""
+    return config_manager.get_int(
+        "server.openai_stream_chunk_size",
+        _get_default_from_structure("server.openai_stream_chunk_size"),
+    )
+
+
+def get_openai_stream_by_default() -> bool:
+    """Returns whether POST /v1/audio/speech should stream (for pcm/wav)
+    when the request does not specify "stream" at all. Used because most
+    OpenAI-SDK clients never send that field. A request that explicitly sets
+    "stream": true or "stream": false always takes precedence over this."""
+    return config_manager.get_bool(
+        "server.openai_stream_by_default",
+        _get_default_from_structure("server.openai_stream_by_default"),
     )
 
 
